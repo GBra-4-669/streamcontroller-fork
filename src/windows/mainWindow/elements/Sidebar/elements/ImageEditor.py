@@ -90,6 +90,12 @@ class Layout(Adw.ExpanderRow):
         self.halign_row = HalignRow(sidebar=self.margin_group.sidebar)
         self.add_row(self.halign_row)
 
+        self.opacity_row = OpacityRow(sidebar=self.margin_group.sidebar)
+        self.add_row(self.opacity_row)
+
+        self.speed_row = SpeedRow(sidebar=self.margin_group.sidebar)
+        self.add_row(self.speed_row)
+
     def load_for_identifier(self, identifier: InputIdentifier, state: int):
         self.active_identifier = identifier
         self.active_state = state
@@ -97,6 +103,8 @@ class Layout(Adw.ExpanderRow):
         self.size_row.load_for_identifier(identifier, state)
         self.valign_row.load_for_identifier(identifier, state)
         self.halign_row.load_for_identifier(identifier, state)
+        self.opacity_row.load_for_identifier(identifier, state)
+        self.speed_row.load_for_identifier(identifier, state)
 
 
 class SizeRow(Adw.PreferencesRow):
@@ -258,6 +266,144 @@ class ValignRow(AlignmentRow):
 class HalignRow(AlignmentRow):
     def __init__(self, sidebar, **kwargs):
         super().__init__(sidebar, label_text=gl.lm.get("right-area.image-editor.layout.halign.label"), property_name="halign", **kwargs)
+
+
+class OpacityRow(Adw.PreferencesRow):
+    def __init__(self, sidebar, **kwargs):
+        super().__init__(**kwargs)
+        self.sidebar = sidebar
+        self.active_identifier: InputIdentifier = None
+        self.active_state: int = None
+        self.build()
+        self.connect_signals()
+
+    def build(self):
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, hexpand=True,
+                                margin_start=15, margin_end=15, margin_top=15, margin_bottom=15)
+        self.set_child(self.main_box)
+
+        self.label = Gtk.Label(label="Opacity", hexpand=True, xalign=0)
+        self.main_box.append(self.label)
+
+        self.opacity_spinner = SpinButton(0, 100, 1)
+        self.main_box.append(self.opacity_spinner)
+
+        self.opacity_spinner.revert_button.connect("clicked", self.on_reset)
+
+    def load_for_identifier(self, identifier: InputIdentifier, state: int):
+        self.disconnect_signals()
+        self.active_identifier = identifier
+        self.active_state = state
+
+        controller = gl.app.main_win.get_active_controller()
+        if controller is None:
+            return
+
+        controller_input = controller.get_input(identifier)
+        use_page = controller_input.get_active_state().layout_manager.get_use_page_layout_properties()
+        self.opacity_spinner.revert_button.set_visible(use_page.get("opacity", False))
+
+        self.update_values()
+        self.connect_signals()
+
+    def update_values(self):
+        self.disconnect_signals()
+        controller = gl.app.main_win.get_active_controller()
+        if controller is None:
+            return
+        controller_input = controller.get_input(self.active_identifier)
+        layout = controller_input.get_active_state().layout_manager.get_composed_layout()
+        self.opacity_spinner.button.set_value(int(layout.opacity * 100))
+        self.connect_signals()
+
+    def on_changed(self, widget):
+        active_page = gl.app.main_win.get_active_page()
+        active_page.set_media_opacity(identifier=self.active_identifier, state=self.active_state, opacity=widget.get_value() / 100)
+        self.opacity_spinner.revert_button.set_visible(True)
+
+    def on_reset(self, widget):
+        active_page = gl.app.main_win.get_active_page()
+        active_page.set_media_opacity(identifier=self.active_identifier, state=self.active_state, opacity=None)
+        self.opacity_spinner.revert_button.set_visible(False)
+        self.update_values()
+
+    def connect_signals(self):
+        self.opacity_spinner.button.connect("value-changed", self.on_changed)
+
+    def disconnect_signals(self):
+        try:
+            self.opacity_spinner.button.disconnect_by_func(self.on_changed)
+        except:
+            pass
+
+
+class SpeedRow(Adw.PreferencesRow):
+    def __init__(self, sidebar, **kwargs):
+        super().__init__(**kwargs)
+        self.sidebar = sidebar
+        self.active_identifier: InputIdentifier = None
+        self.active_state: int = None
+        self.build()
+        self.connect_signals()
+
+    def build(self):
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, hexpand=True,
+                                margin_start=15, margin_end=15, margin_top=15, margin_bottom=15)
+        self.set_child(self.main_box)
+
+        self.label = Gtk.Label(label="GIF Speed", hexpand=True, xalign=0)
+        self.main_box.append(self.label)
+
+        self.speed_spinner = SpinButton(10, 300, 1)
+        self.main_box.append(self.speed_spinner)
+
+        self.speed_spinner.revert_button.connect("clicked", self.on_reset)
+
+    def load_for_identifier(self, identifier: InputIdentifier, state: int):
+        self.disconnect_signals()
+        self.active_identifier = identifier
+        self.active_state = state
+
+        controller = gl.app.main_win.get_active_controller()
+        if controller is None:
+            return
+
+        controller_input = controller.get_input(identifier)
+        use_page = controller_input.get_active_state().layout_manager.get_use_page_layout_properties()
+        self.speed_spinner.revert_button.set_visible(use_page.get("speed", False))
+
+        self.update_values()
+        self.connect_signals()
+
+    def update_values(self):
+        self.disconnect_signals()
+        controller = gl.app.main_win.get_active_controller()
+        if controller is None:
+            return
+        controller_input = controller.get_input(self.active_identifier)
+        layout = controller_input.get_active_state().layout_manager.get_composed_layout()
+        self.speed_spinner.button.set_value(int(layout.speed * 100))
+        self.connect_signals()
+
+    def on_changed(self, widget):
+        active_page = gl.app.main_win.get_active_page()
+        active_page.set_media_speed(identifier=self.active_identifier, state=self.active_state, speed=widget.get_value() / 100)
+        self.speed_spinner.revert_button.set_visible(True)
+
+    def on_reset(self, widget):
+        active_page = gl.app.main_win.get_active_page()
+        active_page.set_media_speed(identifier=self.active_identifier, state=self.active_state, speed=None)
+        self.speed_spinner.revert_button.set_visible(False)
+        self.update_values()
+
+    def connect_signals(self):
+        self.speed_spinner.button.connect("value-changed", self.on_changed)
+
+    def disconnect_signals(self):
+        try:
+            self.speed_spinner.button.disconnect_by_func(self.on_changed)
+        except:
+            pass
 
 
 class SpinButton(Gtk.Box):

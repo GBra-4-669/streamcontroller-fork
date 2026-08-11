@@ -20,3 +20,5 @@ class ImageLayout:
     halign: float = None
     fill_mode: str = None
     size: float = None
+    opacity: float = None
+    speed: float = None

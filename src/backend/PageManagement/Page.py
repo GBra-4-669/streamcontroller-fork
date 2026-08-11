@@ -965,6 +965,22 @@ class Page:
         if update:
             self.update_input(identifier, state)
 
+    def get_media_opacity(self, identifier: InputIdentifier, state: int) -> float:
+        return self._get_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "media", "opacity"]) or 1.0
+
+    def set_media_opacity(self, identifier: InputIdentifier, state: int, opacity: float, update: bool = True) -> None:
+        self._set_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "media", "opacity"], opacity)
+        if update:
+            self.update_input(identifier, state)
+
+    def get_media_speed(self, identifier: InputIdentifier, state: int) -> float:
+        return self._get_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "media", "speed"]) or 1.0
+
+    def set_media_speed(self, identifier: InputIdentifier, state: int, speed: float, update: bool = True) -> None:
+        self._set_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "media", "speed"], speed)
+        if update:
+            self.update_input(identifier, state)
+
     def get_media_path(self, identifier: InputIdentifier, state: int) -> str:
         return self._get_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "media", "path"])
 

@@ -1791,11 +1791,12 @@ class BackgroundVideo(BackgroundVideoCache):
         return segment.convert("RGBA")
 
 class KeyGIF(SingleKeyAsset):
-    def __init__(self, controller_key: "ControllerKey", gif_path: str, fps: int = 30, loop: bool = True):
+    def __init__(self, controller_key: "ControllerKey", gif_path: str, fps: int = 30, loop: bool = True, speed: float = 1.0):
         super().__init__(controller_key)
         self.gif_path = gif_path
         self.fps = fps
         self.loop = loop
+        self.speed = max(0.1, min(10.0, speed))  # Clamp speed to avoid extremes
 
         self.active_frame: int = -1
 
@@ -1826,10 +1827,10 @@ class KeyGIF(SingleKeyAsset):
         return self.frames[self.active_frame]
     
     def get_frame_delay(self) -> float:
-        """Get delay for current frame in seconds"""
+        """Get delay for current frame in seconds, adjusted by speed multiplier."""
         if self.active_frame < 0 or self.active_frame >= len(self.frame_delays):
-            return 1.0 / self.fps  # Fallback to fps-based timing
-        return self.frame_delays[self.active_frame] / 1000.0  # Convert ms to seconds
+            return (1.0 / self.fps) / self.speed  # Fallback to fps-based timing, adjusted
+        return (self.frame_delays[self.active_frame] / 1000.0) / self.speed  # Convert ms to seconds, divide by speed
     
     def get_raw_image(self) -> Image.Image:
         return self.get_next_frame()
@@ -2127,7 +2128,9 @@ class LayoutManager:
             "valign": self.page_layout.valign is not None,
             "halign": self.page_layout.halign is not None,
             "fill-mode": self.page_layout.fill_mode is not None,
-            "size": self.page_layout.size is not None
+            "size": self.page_layout.size is not None,
+            "opacity": self.page_layout.opacity is not None,
+            "speed": self.page_layout.speed is not None
         }
     
     def get_composed_layout(self) -> ImageLayout:
@@ -2145,6 +2148,10 @@ class LayoutManager:
             layout.fill_mode = page_layout.fill_mode
         if use_page_layout_properties["size"]:
             layout.size = page_layout.size
+        if use_page_layout_properties["opacity"]:
+            layout.opacity = page_layout.opacity
+        if use_page_layout_properties["speed"]:
+            layout.speed = page_layout.speed
 
         return self.inject_defaults(layout)
     
@@ -2160,6 +2167,10 @@ class LayoutManager:
                 layout.fill_mode = "contain"
         if layout.size is None:
             layout.size = 1
+        if layout.opacity is None:
+            layout.opacity = 1.0
+        if layout.speed is None:
+            layout.speed = 1.0
 
         return layout
     
@@ -2224,6 +2235,12 @@ class LayoutManager:
             final_image.paste(image_resized, (left_margin, top_margin), image_resized)
         else:
             final_image.paste(image_resized, (left_margin, top_margin))
+
+        # Apply opacity from layout
+        if layout.opacity < 1.0:
+            alpha = final_image.getchannel("A")
+            alpha = alpha.point(lambda p: int(p * layout.opacity))
+            final_image.putalpha(alpha)
 
         return final_image
     
@@ -3062,7 +3079,8 @@ class ControllerKey(ControllerInput):
                                 controller_key=self,
                                 gif_path=path,
                                 loop=state_dict.get("media", {}).get("loop", True),
-                                fps=state_dict.get("media", {}).get("fps", 30)
+                                fps=state_dict.get("media", {}).get("fps", 30),
+                                speed=state_dict.get("media", {}).get("speed", 1.0)
                             )) # GIFs always update
                         else:
                             state.set_video(InputVideo(
@@ -3077,6 +3095,8 @@ class ControllerKey(ControllerInput):
                     size=state_dict.get("media", {}).get("size"),
                     valign=state_dict.get("media", {}).get("valign"),
                     halign=state_dict.get("media", {}).get("halign"),
+                    opacity=state_dict.get("media", {}).get("opacity"),
+                    speed=state_dict.get("media", {}).get("speed"),
                 )
                 state.layout_manager.set_page_layout(layout, update=False)
 

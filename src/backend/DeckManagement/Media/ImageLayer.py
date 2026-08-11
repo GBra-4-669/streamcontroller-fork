@@ -5,7 +5,7 @@ import globals as gl
 from loguru import logger as log
 
 class ImageLayer:
-    def __init__(self, image: Image.Image, size: float = 1.0, halign: float = 0.0, valign: float = 0.0):
+    def __init__(self, image: Image.Image, size: float = 1.0, halign: float = 0.0, valign: float = 0.0, opacity: float = 1.0):
         """
         Initializes an ImageLayer instance.
 
@@ -14,11 +14,13 @@ class ImageLayer:
             size (float, optional): Size of the image as a percentage of the base size. Defaults to 1.0.
             halign (float, optional): Horizontal alignment offset. Negative moves left, positive moves right. Defaults to 0.0.
             valign (float, optional): Vertical alignment offset. Negative moves up, positive moves down. Defaults to 0.0.
+            opacity (float, optional): Opacity of this layer (0.0 = transparent, 1.0 = opaque). Defaults to 1.0.
         """
         self.image: Image.Image = image
         self.size = size
         self.halign = halign
         self.valign = valign
+        self.opacity = max(0.0, min(1.0, opacity))
 
     @classmethod
     def from_image_path(cls, media_path: str, size: float = 1.0, halign: float = 0.0, valign: float = 0.0) -> "ImageLayer":
@@ -63,6 +65,12 @@ class ImageLayer:
         new_width = int(base_size[0] * self.size)
         new_height = int(base_size[1] * self.size)
         scaled_image = self.image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+        # Apply layer opacity
+        if self.opacity < 1.0:
+            alpha = scaled_image.getchannel("A")
+            alpha = alpha.point(lambda p: int(p * self.opacity))
+            scaled_image.putalpha(alpha)
 
         x_offset = (base_size[0] - new_width) // 2
         y_offset = (base_size[1] - new_height) // 2

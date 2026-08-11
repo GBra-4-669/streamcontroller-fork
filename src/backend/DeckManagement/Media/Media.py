@@ -4,7 +4,7 @@ from loguru import logger as log
 
 
 class Media:
-    def __init__(self, size: float = 1.0, halign: float = 0.0, valign: float = 0.0, layers: list[ImageLayer] = []):
+    def __init__(self, size: float = 1.0, halign: float = 0.0, valign: float = 0.0, layers: list[ImageLayer] = [], opacity: float = 1.0):
         """
         Initializes a new Media object.
 
@@ -13,11 +13,13 @@ class Media:
             halign (float, optional): The horizontal alignment of the media. Defaults to 0.0.
             valign (float, optional): The vertical alignment of the media. Defaults to 0.0.
             layers (list[ImageLayer], optional): The list of image layers. Defaults to [].
+            opacity (float, optional): Global opacity (0.0-1.0). Applied after compositing all layers. Defaults to 1.0.
         """
         self.layers: list[ImageLayer] = layers
         self.size = size
         self.halign = halign
         self.valign = valign
+        self.opacity = max(0.0, min(1.0, opacity))
 
     @classmethod
     def from_path(cls, path: str, size: float = 1.0, halign: float = 0.0, valign: float = 0.0):
@@ -117,5 +119,11 @@ class Media:
         image, position = post_image_layer.transform(base_image.size)
 
         base_image.paste(image, position, image)
+
+        # Apply global media opacity
+        if self.opacity < 1.0:
+            alpha = base_image.getchannel("A")
+            alpha = alpha.point(lambda p: int(p * self.opacity))
+            base_image.putalpha(alpha)
 
         return base_image
