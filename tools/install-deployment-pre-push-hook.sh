@@ -67,7 +67,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     case "\$remote_ref" in
         refs/heads/*)
             branch="\${remote_ref#refs/heads/}"
-            ( python3 "$(quote "$cli")" --trigger-deployment "$(quote "$owner")" "$(quote "$github_repo")" "\$branch" >/dev/null 2>&1 || true ) &
+            nohup python3 "$(quote "$cli")" --trigger-deployment "$(quote "$owner")" "$(quote "$github_repo")" "\$branch" >/dev/null 2>&1 </dev/null &
             ;;
     esac
 done
