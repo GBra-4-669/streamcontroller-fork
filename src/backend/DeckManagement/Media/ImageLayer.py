@@ -64,7 +64,7 @@ class ImageLayer:
         """
         new_width = int(base_size[0] * self.size)
         new_height = int(base_size[1] * self.size)
-        scaled_image = self.image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        scaled_image = self.image.resize((new_width, new_height), Image.Resampling.BILINEAR)
 
         # Apply layer opacity
         if self.opacity < 1.0:

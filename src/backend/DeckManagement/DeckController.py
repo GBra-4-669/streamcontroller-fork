@@ -1807,13 +1807,9 @@ class KeyGIF(SingleKeyAsset):
         # Extract frames and their delays
         for frame in ImageSequence.Iterator(self.gif):
             self.frames.append(frame.convert("RGBA"))
-            # Get per-frame delay from GIF metadata (PIL normalizes to ms)
+            # Get per-frame delay from GIF metadata.
+            # PIL >= 12 normalizes GIF durations to milliseconds automatically.
             delay = frame.info.get('duration', self.gif.info.get('duration', 100))
-            # Workaround: some malformed GIFs store delay in centiseconds
-            # (e.g., delay=10 meaning 100ms). PIL usually normalizes this,
-            # but if it didn't, we detect values <50 and scale up.
-            if delay < 50:
-                delay *= 10
             self.frame_delays.append(delay)
 
     def get_next_frame(self) -> Image.Image:
@@ -2216,11 +2212,11 @@ class LayoutManager:
             return background.copy()
 
         if layout.fill_mode == "stretch":
-            image_resized = image.resize(image_size, Image.Resampling.HAMMING)
+            image_resized = image.resize(image_size, Image.Resampling.BILINEAR)
         elif layout.fill_mode == "cover":
-            image_resized = ImageOps.cover(image, image_size, Image.Resampling.HAMMING)
+            image_resized = ImageOps.cover(image, image_size, Image.Resampling.BILINEAR)
         else:
-            image_resized = ImageOps.contain(image, image_size, Image.Resampling.HAMMING)
+            image_resized = ImageOps.contain(image, image_size, Image.Resampling.BILINEAR)
 
         halign = layout.halign
         valign = layout.valign

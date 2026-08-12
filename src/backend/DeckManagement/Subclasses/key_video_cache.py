@@ -103,7 +103,7 @@ class VideoFrameCache:
                 with Image.open(video_path) as gif:
                     self.n_frames = getattr(gif, "n_frames", 1)
                     gif.seek(0)
-                    frame0 = ImageOps.fit(gif.convert("RGBA"), self.size, Image.Resampling.LANCZOS)
+                    frame0 = ImageOps.fit(gif.convert("RGBA"), self.size, Image.Resampling.BILINEAR)
                 self.cache[0] = frame0
             except Exception as e:
                 log.warning(f"Could not render GIF preview for {video_path}: {e}")
@@ -185,7 +185,7 @@ class VideoFrameCache:
                             continue
                         try:
                             gif.seek(i)
-                            frame = ImageOps.fit(gif.convert("RGBA"), self.size, Image.Resampling.LANCZOS)
+                            frame = ImageOps.fit(gif.convert("RGBA"), self.size, Image.Resampling.BILINEAR)
                             if self.do_caching:
                                 self._write_cache_frame(frame, i)
                             self.cache[i] = frame
@@ -263,7 +263,7 @@ class VideoFrameCache:
             self.last_frame_index += 1
             pil_image = ImageOps.fit(
                 Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)),
-                self.size, Image.Resampling.LANCZOS,
+                self.size, Image.Resampling.BILINEAR,
             )
             self.last_decoded_frame = pil_image
             if self.do_caching:
