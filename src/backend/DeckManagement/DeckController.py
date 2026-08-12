@@ -1800,28 +1800,28 @@ class KeyGIF(SingleKeyAsset):
 
         self.active_frame: int = -1
 
+        # Open GIF and extract frame delays only (metadata - cheap).
+        # Frames are decoded on-demand via seek() to avoid upfront memory cost.
         self.gif = Image.open(self.gif_path)
-        self.frames = []
+        self.n_frames = getattr(self.gif, 'n_frames', 1)
         self.frame_delays = []
-        
-        # Extract frames and their delays
-        for frame in ImageSequence.Iterator(self.gif):
-            self.frames.append(frame.convert("RGBA"))
-            # Get per-frame delay from GIF metadata.
-            # PIL >= 12 normalizes GIF durations to milliseconds automatically.
-            delay = frame.info.get('duration', self.gif.info.get('duration', 100))
+        for i in range(self.n_frames):
+            self.gif.seek(i)
+            delay = self.gif.info.get('duration', 100)
             self.frame_delays.append(delay)
+        self.gif.seek(0)  # reset to first frame
 
     def get_next_frame(self) -> Image.Image:
         self.active_frame += 1
 
-        if self.active_frame >= len(self.frames):
+        if self.active_frame >= self.n_frames:
             if self.loop:
                 self.active_frame = 0
             else:
-                self.active_frame = len(self.frames) - 1
+                self.active_frame = self.n_frames - 1
 
-        return self.frames[self.active_frame]
+        self.gif.seek(self.active_frame)
+        return self.gif.convert("RGBA")
     
     def get_frame_delay(self) -> float:
         """Get delay for current frame in seconds, adjusted by speed multiplier."""
@@ -1833,12 +1833,10 @@ class KeyGIF(SingleKeyAsset):
         return self.get_next_frame()
     
     def close(self) -> None:
-        self.gif = None
-        self.frames = None
+        if self.gif is not None:
+            self.gif.close()
+            self.gif = None
         self.frame_delays = None
-        del self.gif
-        del self.frames
-        del self.frame_delays
 
 class LabelManager:
     def __init__(self, controller_input: "ControllerInput"):
