@@ -185,7 +185,7 @@ class LabelRow(Adw.PreferencesRow):
     def connect_signals(self):
         self.text_entry.entry.connect("changed", self.on_change_text)
         self.color_chooser_button.button.connect("color-set", self.on_change_color)
-        self.font_chooser_button.connect("font-set", self.on_change_font)
+        self.font_chooser_button.button.connect("font-set", self.on_change_font)
         self.outline_width.button.connect("value-changed", self.on_change_outline_width)
         self.outline_color_chooser_button.button.connect("color-set", self.on_change_outline_color)
         self.alignment_buttons.left_button.connect("toggled", self.on_change_alignment)
@@ -204,7 +204,7 @@ class LabelRow(Adw.PreferencesRow):
             log.error(f"Failed to disconnect signals. Error: {e}")
 
         try:
-            self.font_chooser_button.disconnect_by_func(self.on_change_font)
+            self.font_chooser_button.button.disconnect_by_func(self.on_change_font)
         except Exception as e:
             log.error(f"Failed to disconnect signals. Error: {e}")
 
@@ -289,7 +289,7 @@ class LabelRow(Adw.PreferencesRow):
             font_style=composed_label.style,
             font_weight=composed_label.font_weight
         )
-        self.font_chooser_button.set_font_desc(desc)
+        self.font_chooser_button.button.set_font_desc(desc)
 
         self.connect_signals()
 
@@ -339,7 +339,7 @@ class LabelRow(Adw.PreferencesRow):
         # font = self.font_chooser_button.button.get_font()
         # name, size = self.parse_font_description(font)
 
-        font_desc = self.font_chooser_button.get_font_desc()
+        font_desc = self.font_chooser_button.button.get_font_desc()
         name, size, weight, style = get_values_from_pango_font_description(font_desc)
 
         active_page = gl.app.main_win.get_active_page()
@@ -436,92 +436,16 @@ class ColorChooserButton(Gtk.Box):
         self.append(self.button)
         self.append(self.revert_button)
 
-CURATED_FONTS = [
-    "System-ui",
-    "URW Gothic",
-    "Noto Sans Symbols",
-    "Roboto",
-    "Montserrat",
-    "Cantarell",
-    "Comfortaa",
-    "Carlito",
-    "DejaVu Sans",
-    "DejaVu Sans Mono",
-    "Source Code Pro",
-    "Droid Sans Fallback",
-]
-
 class FontChooserButton(Gtk.Box):
     def __init__(self, **kwargs):
         super().__init__(css_classes=["linked"], **kwargs)
 
-        self._font_size = 12
-        self._font_weight = 400
-        self._font_style = "normal"
-
-        # Curated font dropdown instead of bloated GTK FontDialog
-        self.model = Gtk.StringList(strings=CURATED_FONTS)
-        self.button = Gtk.DropDown(model=self.model)
-        self.button.set_enable_search(True)
-        self.button.set_show_arrow(True)
-        self.button.set_hexpand(True)
+        self.button = Gtk.FontButton()
+        self.button.set_preview_text("🎮 ▶ ✨ ⚡ 🔧 📁 #@ ♥ 日本語")
         self.revert_button = RevertButton()
 
         self.append(self.button)
         self.append(self.revert_button)
-
-        # Emit "font-set" signal when dropdown changes
-        self.button.connect("notify::selected", self._on_dropdown_changed)
-        self._handlers = []
-
-    def _on_dropdown_changed(self, dropdown, _pspec):
-        for h in self._handlers:
-            h(self)
-
-    def connect(self, signal, handler, *args):
-        if signal == "font-set":
-            self._handlers.append(handler)
-        else:
-            super().connect(signal, handler, *args)
-
-    def disconnect_by_func(self, handler):
-        if handler in self._handlers:
-            self._handlers.remove(handler)
-
-    def get_font_desc(self) -> Pango.FontDescription:
-        desc = Pango.FontDescription()
-        selected = self.button.get_selected()
-        if 0 <= selected < len(CURATED_FONTS):
-            desc.set_family(CURATED_FONTS[selected])
-        desc.set_size(self._font_size * Pango.SCALE)
-        desc.set_weight(Pango.Weight(self._font_weight))
-        if self._font_style == "italic":
-            desc.set_style(Pango.Style.ITALIC)
-        elif self._font_style == "oblique":
-            desc.set_style(Pango.Style.OBLIQUE)
-        else:
-            desc.set_style(Pango.Style.NORMAL)
-        return desc
-
-    def set_font_desc(self, desc: Pango.FontDescription):
-        family = desc.get_family()
-        for i, name in enumerate(CURATED_FONTS):
-            if name.lower() == family.lower():
-                self.button.set_selected(i)
-                break
-        else:
-            # Font not in curated list — add it temporarily
-            self.model.append(family)
-            self.button.set_selected(len(CURATED_FONTS))
-        self._font_size = desc.get_size() // Pango.SCALE
-        self._font_weight = int(desc.get_weight())
-        style = desc.get_style()
-        if style == Pango.Style.ITALIC:
-            self._font_style = "italic"
-        elif style == Pango.Style.OBLIQUE:
-            self._font_style = "oblique"
-        else:
-            self._font_style = "normal"
 
 
 class SpinButton(Gtk.Box):
