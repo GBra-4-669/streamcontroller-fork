@@ -185,7 +185,7 @@ class LabelRow(Adw.PreferencesRow):
     def connect_signals(self):
         self.text_entry.entry.connect("changed", self.on_change_text)
         self.color_chooser_button.button.connect("color-set", self.on_change_color)
-        self.font_chooser_button.button.connect("font-set", self.on_change_font)
+        self.font_chooser_button.connect("font-set", self.on_change_font)
         self.outline_width.button.connect("value-changed", self.on_change_outline_width)
         self.outline_color_chooser_button.button.connect("color-set", self.on_change_outline_color)
         self.alignment_buttons.left_button.connect("toggled", self.on_change_alignment)
@@ -204,7 +204,7 @@ class LabelRow(Adw.PreferencesRow):
             log.error(f"Failed to disconnect signals. Error: {e}")
 
         try:
-            self.font_chooser_button.button.disconnect_by_func(self.on_change_font)
+            self.font_chooser_button.disconnect_by_func(self.on_change_font)
         except Exception as e:
             log.error(f"Failed to disconnect signals. Error: {e}")
 
@@ -289,7 +289,7 @@ class LabelRow(Adw.PreferencesRow):
             font_style=composed_label.style,
             font_weight=composed_label.font_weight
         )
-        self.font_chooser_button.button.set_font_desc(desc)
+        self.font_chooser_button.set_font_desc(desc)
 
         self.connect_signals()
 
@@ -339,7 +339,7 @@ class LabelRow(Adw.PreferencesRow):
         # font = self.font_chooser_button.button.get_font()
         # name, size = self.parse_font_description(font)
 
-        font_desc = self.font_chooser_button.button.get_font_desc()
+        font_desc = self.font_chooser_button.get_font_desc()
         name, size, weight, style = get_values_from_pango_font_description(font_desc)
 
         active_page = gl.app.main_win.get_active_page()
