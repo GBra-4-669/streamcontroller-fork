@@ -2827,8 +2827,16 @@ class ControllerKey(ControllerInput):
                     needs_update = True
                 else:
                     frame_delay = state.key_video.get_frame_delay()
-                    if current_time - self.last_gif_update_time >= frame_delay:
-                        self.last_gif_update_time = current_time
+                    elapsed = current_time - self.last_gif_update_time
+                    if elapsed >= frame_delay:
+                        # Advance by frame_delay (not current_time) to maintain
+                        # fixed-step cadence. If we're multiple frames behind,
+                        # skip the intermediate frames so animation speed stays
+                        # accurate regardless of render jitter.
+                        frames_to_skip = int(elapsed / frame_delay) - 1
+                        self.last_gif_update_time += frame_delay * (frames_to_skip + 1)
+                        for _ in range(frames_to_skip):
+                            state.key_video.get_next_frame()
                         needs_update = True
             else:
                 # For non-GIF videos, use the original FPS-based logic
