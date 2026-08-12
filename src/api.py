@@ -629,7 +629,7 @@ class StreamControllerAPI:
                                 settings.get("environment", "production").strip().lower() != branch):
                             continue
                         existing_state = "idle"
-                        action_objects = page.action_objects.get("Key", {}).get(json_identifier, {})
+                        action_objects = page.action_objects.get("keys", {}).get(json_identifier, {})
                         live_actions = action_objects.get(int(state_data), {})
                         for index, live_action in live_actions.items():
                             if index < len(state_data.get("actions", [])) and state_data["actions"][index] is action:
