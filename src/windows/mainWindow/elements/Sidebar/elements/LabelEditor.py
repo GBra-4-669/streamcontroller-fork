@@ -436,16 +436,90 @@ class ColorChooserButton(Gtk.Box):
         self.append(self.button)
         self.append(self.revert_button)
 
+CURATED_FONTS = [
+    "System-ui",
+    "Roboto",
+    "Montserrat",
+    "Cantarell",
+    "Comfortaa",
+    "Carlito",
+    "DejaVu Sans",
+    "DejaVu Sans Mono",
+    "Source Code Pro",
+    "Droid Sans Fallback",
+]
+
 class FontChooserButton(Gtk.Box):
     def __init__(self, **kwargs):
         super().__init__(css_classes=["linked"], **kwargs)
 
-        self.button = Gtk.FontButton()
-        self.button.set_preview_text("🎮 ▶ ✨ ⚡ 🔧 📁 #@ ♥ 日本語")
+        self._font_size = 12
+        self._font_weight = 400
+        self._font_style = "normal"
+
+        # Curated font dropdown instead of bloated GTK FontDialog
+        self.model = Gtk.StringList(strings=CURATED_FONTS)
+        self.button = Gtk.DropDown(model=self.model)
+        self.button.set_enable_search(True)
+        self.button.set_show_arrow(True)
+        self.button.set_hexpand(True)
         self.revert_button = RevertButton()
 
         self.append(self.button)
         self.append(self.revert_button)
+
+        # Emit "font-set" signal when dropdown changes
+        self.button.connect("notify::selected", self._on_dropdown_changed)
+        self._handlers = []
+
+    def _on_dropdown_changed(self, dropdown, _pspec):
+        for h in self._handlers:
+            h(self)
+
+    def connect(self, signal, handler, *args):
+        if signal == "font-set":
+            self._handlers.append(handler)
+        else:
+            super().connect(signal, handler, *args)
+
+    def disconnect_by_func(self, handler):
+        if handler in self._handlers:
+            self._handlers.remove(handler)
+
+    def get_font_desc(self) -> Pango.FontDescription:
+        desc = Pango.FontDescription()
+        selected = self.button.get_selected()
+        if 0 <= selected < len(CURATED_FONTS):
+            desc.set_family(CURATED_FONTS[selected])
+        desc.set_size(self._font_size * Pango.SCALE)
+        desc.set_weight(Pango.Weight(self._font_weight))
+        if self._font_style == "italic":
+            desc.set_style(Pango.Style.ITALIC)
+        elif self._font_style == "oblique":
+            desc.set_style(Pango.Style.OBLIQUE)
+        else:
+            desc.set_style(Pango.Style.NORMAL)
+        return desc
+
+    def set_font_desc(self, desc: Pango.FontDescription):
+        family = desc.get_family()
+        for i, name in enumerate(CURATED_FONTS):
+            if name.lower() == family.lower():
+                self.button.set_selected(i)
+                break
+        else:
+            # Font not in curated list — add it temporarily
+            self.model.append(family)
+            self.button.set_selected(len(CURATED_FONTS))
+        self._font_size = desc.get_size() // Pango.SCALE
+        self._font_weight = int(desc.get_weight())
+        style = desc.get_style()
+        if style == Pango.Style.ITALIC:
+            self._font_style = "italic"
+        elif style == Pango.Style.OBLIQUE:
+            self._font_style = "oblique"
+        else:
+            self._font_style = "normal"
 
 
 class SpinButton(Gtk.Box):
