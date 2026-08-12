@@ -1,0 +1,30 @@
+{
+    "generic": {
+        "copyright": "Copyright (C) 2026 Ben Wyrosdick",
+        "original-url": "https://github.com/benwyrosdick/streamdeck-github",
+        "license": "MIT",
+        "license-url": "https://github.com/benwyrosdick/streamdeck-github/blob/main/LICENSE",
+        "description": "Unofficial community plugin surfacing GitHub repo insights via the gh CLI. Not affiliated with or endorsed by GitHub, Inc."
+    },
+    "assets/pr.png": {
+        "copyright": "Copyright (C) 2026 Ben Wyrosdick",
+        "original-url": "https://github.com/benwyrosdick/streamdeck-github",
+        "license": "MIT",
+        "license-url": "https://github.com/benwyrosdick/streamdeck-github/blob/main/LICENSE",
+        "description": "Original pull-request glyph drawn for this plugin. 'GitHub' is a trademark of GitHub, Inc.; used nominatively to indicate compatibility."
+    },
+    "assets/issue.png": {
+        "copyright": "Copyright (C) 2026 Ben Wyrosdick",
+        "original-url": "https://github.com/benwyrosdick/streamdeck-github",
+        "license": "MIT",
+        "license-url": "https://github.com/benwyrosdick/streamdeck-github/blob/main/LICENSE",
+        "description": "Original issue glyph (ring with center dot) drawn for this plugin."
+    },
+    "assets/ci_*.png": {
+        "copyright": "Copyright (C) 2026 Ben Wyrosdick",
+        "original-url": "https://github.com/benwyrosdick/streamdeck-github",
+        "license": "MIT",
+        "license-url": "https://github.com/benwyrosdick/streamdeck-github/blob/main/LICENSE",
+        "description": "Original CI status glyphs (check / cross / circular arrow / dots / dash) drawn for this plugin."
+    }
+}

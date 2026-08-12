@@ -1,0 +1,79 @@
+{
+    "plugin.name": "GitHub Insights",
+
+    "actions.pr-count.name": "PR Count",
+
+    "actions.pr-count.name-row.label": "Button label",
+    "actions.pr-count.repo.label": "Repository (owner/name)",
+
+    "actions.pr-count.author.label": "Author",
+    "actions.pr-count.author.any": "Anyone",
+    "actions.pr-count.author.me": "Me",
+    "actions.pr-count.author.not-me": "Not me",
+    "actions.pr-count.author.user": "Specific user",
+    "actions.pr-count.author.not-user": "Not a user",
+    "actions.pr-count.user.label": "User (for Specific / Not a user)",
+
+    "actions.pr-count.approval.label": "Approval",
+    "actions.pr-count.approval.any": "Any",
+    "actions.pr-count.approval.none": "Pending review",
+    "actions.pr-count.approval.approved": "Approved",
+    "actions.pr-count.approval.changes": "Changes requested",
+    "actions.pr-count.approval.required": "Review required",
+
+    "actions.pr-count.labels.label": "Labels (comma-separated)",
+
+    "actions.pr-count.state.label": "State",
+    "actions.pr-count.state.open": "Open",
+    "actions.pr-count.state.closed": "Closed",
+    "actions.pr-count.state.merged": "Merged",
+    "actions.pr-count.state.all": "All",
+
+    "actions.pr-count.extra.label": "Advanced query (raw qualifiers)",
+
+    "actions.issue-count.name": "Issue Count",
+
+    "actions.issue-count.name-row.label": "Button label",
+    "actions.issue-count.repo.label": "Repository (owner/name)",
+
+    "actions.issue-count.author.label": "Author",
+    "actions.issue-count.author.any": "Anyone",
+    "actions.issue-count.author.me": "Me",
+    "actions.issue-count.author.not-me": "Not me",
+    "actions.issue-count.author.user": "Specific user",
+    "actions.issue-count.author.not-user": "Not a user",
+    "actions.issue-count.user.label": "User (for Specific / Not a user)",
+
+    "actions.issue-count.assignee.label": "Assignee",
+    "actions.issue-count.assignee.any": "Anyone",
+    "actions.issue-count.assignee.me": "Me",
+    "actions.issue-count.assignee.not-me": "Not me",
+    "actions.issue-count.assignee.none": "Unassigned",
+
+    "actions.issue-count.labels.label": "Labels (comma-separated)",
+
+    "actions.issue-count.state.label": "State",
+    "actions.issue-count.state.open": "Open",
+    "actions.issue-count.state.closed": "Closed",
+    "actions.issue-count.state.all": "All",
+
+    "actions.issue-count.extra.label": "Advanced query (raw qualifiers)",
+
+    "actions.ci-status.name": "CI Status",
+    "actions.ci-status.name-row.label": "Button label",
+    "actions.ci-status.repo.label": "Repository (owner/name)",
+    "actions.ci-status.workflow.label": "Workflow (name or file, optional)",
+    "actions.ci-status.branch.label": "Branch (optional, any branch if blank)",
+
+    "actions.notification-count.name": "Notification Count",
+    "actions.notification-count.name-row.label": "Button label",
+    "actions.notification-count.repo.label": "Repository (owner/name, optional)",
+
+    "actions.notification-count.filter.label": "Filter",
+    "actions.notification-count.filter.all": "All unread",
+    "actions.notification-count.filter.assigned": "Assigned",
+    "actions.notification-count.filter.participating": "Participating",
+    "actions.notification-count.filter.mentioned": "Mentioned",
+    "actions.notification-count.filter.team-mentioned": "Team mentioned",
+    "actions.notification-count.filter.review-requested": "Review requested"
+}

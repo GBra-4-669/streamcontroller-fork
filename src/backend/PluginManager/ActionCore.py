@@ -286,6 +286,18 @@ class ActionCore(rpyc.Service):
         if update:
             self.get_input().update()
 
+    def set_status_badge(self, color: tuple[int, int, int, int] | None,
+                         update: bool = True):
+        self.raise_error_if_not_ready()
+        if not self.get_is_present():
+            return
+        state = self.get_state()
+        if state is None or state.state != self.state:
+            return
+        state._status_badge = color
+        if update:
+            self.get_input().update()
+
     def set_label(self, text: str, position: str = "bottom", color: list[int]=None,
                   font_family: str=None, font_size=None, outline_width: int = None, outline_color: list[int] = None,
                   font_weight: int = None, font_style: str = None,

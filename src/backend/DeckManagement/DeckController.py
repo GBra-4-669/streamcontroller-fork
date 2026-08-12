@@ -2306,6 +2306,7 @@ class ControllerInputState:
         self.state = state
         self._overlay: Image.Image = None
         self._border_color: tuple[int, int, int, int] | None = None
+        self._status_badge: tuple[int, int, int, int] | None = None
         self.hide_overlay_timer: Timer = None
 
         # managers
@@ -2955,6 +2956,20 @@ class ControllerKey(ControllerInput):
                 outline=state._border_color,
                 width=7,
                 radius=8,
+            )
+            del draw
+
+        if state._status_badge is not None:
+            draw = ImageDraw.Draw(labeled_image)
+            size = max(14, round(min(labeled_image.size) * 0.22) + 2)
+            margin = max(4, round(size * 0.18))
+            left = labeled_image.width - margin - size
+            top = margin
+            draw.ellipse(
+                (left, top, left + size, top + size),
+                fill=state._status_badge,
+                outline=(0, 0, 0, 255),
+                width=max(2, round(size * 0.12)),
             )
             del draw
 

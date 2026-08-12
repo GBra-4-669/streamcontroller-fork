@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Validate metadata JSON
+        run: |
+          python -c "import json; [json.load(open(f)) for f in ['manifest.json', 'about.json', 'attribution.json', 'locales/en_US.json']]; print('metadata JSON OK')"
+
+      - name: Syntax-check all plugin modules
+        # compileall catches syntax errors without importing (the actions/*
+        # modules require GTK, which isn't available on CI runners).
+        run: python -m compileall -q actions backend main.py
+
+      - name: Run backend tests
+        run: pytest -q

@@ -1,0 +1,19 @@
+{
+    "version": "1.0.0",
+    "thumbnail": "store/Thumbnail.png",
+    "id": "com_benwyrosdick_GitHub",
+    "name": "GitHub Insights",
+    "github": "https://github.com/benwyrosdick/streamdeck-github",
+    "descriptions": {
+        "en_US": "Surface GitHub repo insights on your Stream Deck. Shows a live count of pull requests matching filters (author, approval status, labels)."
+    },
+    "short-descriptions": {
+        "en_US": "GitHub repo insights on your Stream Deck"
+    },
+    "tags": ["GitHub", "Development", "PRs", "Notifications"],
+    "minimum-app-version": "1.5.0-beta.14",
+    "app-version": "1.5.0-beta.14",
+
+    "description": "Surface GitHub repo insights on your Stream Deck. Shows a live count of pull requests matching filters (author, approval status, labels).",
+    "short-description": "GitHub repo insights on your Stream Deck"
+}

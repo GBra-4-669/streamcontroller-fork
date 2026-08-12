@@ -1,0 +1,15 @@
+{
+    "author": "Ben Wyrosdick",
+    "copyright": "Copyright (C) 2026 Ben Wyrosdick",
+    "support": "https://github.com/benwyrosdick/streamdeck-github",
+    "comments": {
+        "en_US": "Reads GitHub data via the host `gh` CLI (using your existing gh auth). No API key required; `gh` must be installed and authenticated on the host."
+    },
+    "credits": {
+        "Developer": ["Ben Wyrosdick"],
+        "Assets": ["Ben Wyrosdick"]
+    },
+    "acknowledgements": {
+        "Trademarks": ["GitHub is a trademark of GitHub, Inc. This is an unofficial, community plugin and is not affiliated with or endorsed by GitHub, Inc."]
+    }
+}

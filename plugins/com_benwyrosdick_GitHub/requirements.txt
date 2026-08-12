@@ -1,0 +1,2 @@
+# No third-party dependencies — this plugin uses only the Python standard
+# library (subprocess, json, urllib) and talks to the host `gh` CLI.
