@@ -1807,10 +1807,11 @@ class KeyGIF(SingleKeyAsset):
         # Extract frames and their delays
         for frame in ImageSequence.Iterator(self.gif):
             self.frames.append(frame.convert("RGBA"))
-            # Get frame delay from GIF metadata (in milliseconds)
-            # Default to 100ms (10fps) if no delay specified
-            delay = self.gif.info.get('duration', 100)
-            # Some GIFs use delay in centiseconds, convert to milliseconds
+            # Get per-frame delay from GIF metadata (PIL normalizes to ms)
+            delay = frame.info.get('duration', self.gif.info.get('duration', 100))
+            # Workaround: some malformed GIFs store delay in centiseconds
+            # (e.g., delay=10 meaning 100ms). PIL usually normalizes this,
+            # but if it didn't, we detect values <50 and scale up.
             if delay < 50:
                 delay *= 10
             self.frame_delays.append(delay)
