@@ -114,16 +114,6 @@ api_action_requests: dict[str, dict] = {} # Stores api action trigger requests m
 tray_icon: "TrayIcon" = None
 fallback_font: str = find_fallback_font()
 
-# ── Register bundled fonts with matplotlib (after fallback is set) ───
-import matplotlib.font_manager as _fm
-_bundled_font_dir = os.path.join(os.path.dirname(__file__), "Assets", "Fonts")
-if os.path.isdir(_bundled_font_dir):
-    for _fname in os.listdir(_bundled_font_dir):
-        if _fname.lower().endswith(('.ttf', '.otf')):
-            try:
-                _fm.fontManager.addfont(os.path.join(_bundled_font_dir, _fname))
-            except Exception:
-                pass
 showed_donate_window: bool = False
 screen_locked: bool = False
 loggers: dict[str, "Logger"] = {}
