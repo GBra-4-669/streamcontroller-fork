@@ -46,7 +46,7 @@ PLUGIN_DIR = os.path.join(DATA_PATH, "plugins")
 if os.getenv("PLUGIN_DIR") is not None:
     PLUGIN_DIR = os.getenv("PLUGIN_DIR")
     top_level_folder = os.path.dirname(PLUGIN_DIR)
-    sys.path.append(top_level_folder)
+    sys.path.insert(0, top_level_folder)
 
     if os.path.exists(os.path.join(DATA_PATH, "plugins")):
         log.warning(f"You're using a plugin dir path outside of your data dir, but also have a plugin dir in the data dir. This may cause problems.")

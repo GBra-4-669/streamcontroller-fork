@@ -2305,6 +2305,7 @@ class ControllerInputState:
         self.deck_controller = controller_input.deck_controller
         self.state = state
         self._overlay: Image.Image = None
+        self._border_color: tuple[int, int, int, int] | None = None
         self.hide_overlay_timer: Timer = None
 
         # managers
@@ -2910,13 +2911,6 @@ class ControllerKey(ControllerInput):
         if background is None:
             background = self.deck_controller.generate_alpha_key().copy()
 
-        if state._overlay:
-            height = round(self.deck_controller.get_key_image_size()[1]*0.75)
-            img = state._overlay.resize((height, height))
-            background.paste(img, (int((self.deck_controller.get_key_image_size()[0] - height) // 2), int((self.deck_controller.get_key_image_size()[1] - height) // 2)), img)
-            return background
-
-
         # If the background should stay full size while pressed, the image and the labels
         # are composed onto a transparent canvas instead, so that only that layer gets
         # shrunk and can be pasted back onto the untouched background
@@ -2953,6 +2947,21 @@ class ControllerKey(ControllerInput):
 
         if self.has_unavailable_action() and not self.deck_controller.screen_saver.showing:
             labeled_image = self.add_warning_point(labeled_image)
+
+        if state._border_color is not None:
+            draw = ImageDraw.Draw(labeled_image)
+            draw.rounded_rectangle(
+                (2, 2, labeled_image.width - 3, labeled_image.height - 3),
+                outline=state._border_color,
+                width=7,
+                radius=8,
+            )
+            del draw
+
+        if state._overlay:
+            overlay = state._overlay.resize(labeled_image.size)
+            labeled_image.alpha_composite(overlay)
+            overlay.close()
 
         if background is not None:
             background.close()
