@@ -140,7 +140,7 @@ class SizeRow(Adw.PreferencesRow):
 
         controller_input = controller.get_input(identifier)
         use_page_properties = controller_input.get_active_state().layout_manager.get_use_page_layout_properties()
-        self.size_spinner.revert_button.set_visible(use_page_properties.get("size", False))
+        self.size_spinner.revert_button.set_sensitive(use_page_properties.get("size", False))
 
         self.update_values()
 
@@ -166,13 +166,13 @@ class SizeRow(Adw.PreferencesRow):
         active_page = gl.app.main_win.get_active_page()
         active_page.set_media_size(identifier=self.active_identifier, state=self.active_state, size=widget.get_value()/100)
 
-        self.size_spinner.revert_button.set_visible(True)
+        self.size_spinner.revert_button.set_sensitive(True)
 
     def on_size_reset(self, widget):
         active_page = gl.app.main_win.get_active_page()
         active_page.set_media_size(identifier=self.active_identifier, state=self.active_state, size=None)
 
-        self.size_spinner.revert_button.set_visible(False)
+        self.size_spinner.revert_button.set_sensitive(False)
         self.update_values()
 
     def connect_signals(self):
@@ -218,7 +218,7 @@ class AlignmentRow(Adw.PreferencesRow):
 
         controller_input = controller.get_input(identifier)
         use_page_properties = controller_input.get_active_state().layout_manager.get_use_page_layout_properties()
-        self.alignment_spinner.revert_button.set_visible(use_page_properties.get(self.property_name, False))
+        self.alignment_spinner.revert_button.set_sensitive(use_page_properties.get(self.property_name, False))
 
         self.connect_signals()
         self.update_values()
@@ -242,7 +242,7 @@ class AlignmentRow(Adw.PreferencesRow):
         page_method = getattr(active_page, f"set_media_{self.property_name}")
         page_method(self.active_identifier, self.active_state, widget.get_value())
 
-        self.alignment_spinner.revert_button.set_visible(True)
+        self.alignment_spinner.revert_button.set_sensitive(True)
 
     def on_alignment_reset(self, widget):
         active_page = gl.app.main_win.get_active_page()
@@ -250,7 +250,7 @@ class AlignmentRow(Adw.PreferencesRow):
         page_method = getattr(active_page, f"set_media_{self.property_name}")
         page_method(self.active_identifier, self.active_state, None)
 
-        self.alignment_spinner.revert_button.set_visible(False)
+        self.alignment_spinner.revert_button.set_sensitive(False)
         self.update_values()
 
     def connect_signals(self):
@@ -301,7 +301,7 @@ class OpacityRow(Adw.PreferencesRow):
 
         controller_input = controller.get_input(identifier)
         use_page = controller_input.get_active_state().layout_manager.get_use_page_layout_properties()
-        self.opacity_spinner.revert_button.set_visible(use_page.get("opacity", False))
+        self.opacity_spinner.revert_button.set_sensitive(use_page.get("opacity", False))
 
         self.update_values()
         self.connect_signals()
@@ -319,12 +319,12 @@ class OpacityRow(Adw.PreferencesRow):
     def on_changed(self, widget):
         active_page = gl.app.main_win.get_active_page()
         active_page.set_media_opacity(identifier=self.active_identifier, state=self.active_state, opacity=widget.get_value() / 100)
-        self.opacity_spinner.revert_button.set_visible(True)
+        self.opacity_spinner.revert_button.set_sensitive(True)
 
     def on_reset(self, widget):
         active_page = gl.app.main_win.get_active_page()
         active_page.set_media_opacity(identifier=self.active_identifier, state=self.active_state, opacity=None)
-        self.opacity_spinner.revert_button.set_visible(False)
+        self.opacity_spinner.revert_button.set_sensitive(False)
         self.update_values()
 
     def connect_signals(self):
@@ -370,7 +370,7 @@ class SpeedRow(Adw.PreferencesRow):
 
         controller_input = controller.get_input(identifier)
         use_page = controller_input.get_active_state().layout_manager.get_use_page_layout_properties()
-        self.speed_spinner.revert_button.set_visible(use_page.get("speed", False))
+        self.speed_spinner.revert_button.set_sensitive(use_page.get("speed", False))
 
         self.update_values()
         self.connect_signals()
@@ -388,12 +388,12 @@ class SpeedRow(Adw.PreferencesRow):
     def on_changed(self, widget):
         active_page = gl.app.main_win.get_active_page()
         active_page.set_media_speed(identifier=self.active_identifier, state=self.active_state, speed=widget.get_value() / 100)
-        self.speed_spinner.revert_button.set_visible(True)
+        self.speed_spinner.revert_button.set_sensitive(True)
 
     def on_reset(self, widget):
         active_page = gl.app.main_win.get_active_page()
         active_page.set_media_speed(identifier=self.active_identifier, state=self.active_state, speed=None)
-        self.speed_spinner.revert_button.set_visible(False)
+        self.speed_spinner.revert_button.set_sensitive(False)
         self.update_values()
 
     def connect_signals(self):
