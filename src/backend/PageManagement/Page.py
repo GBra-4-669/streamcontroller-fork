@@ -969,6 +969,9 @@ class Page:
         return self._get_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "media", "opacity"]) or 1.0
 
     def set_media_opacity(self, identifier: InputIdentifier, state: int, opacity: float, update: bool = True) -> None:
+        for key_state in self.get_controller_input_states(identifier, state):
+            key_state.layout_manager.page_layout.opacity = opacity
+
         self._set_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "media", "opacity"], opacity)
         if update:
             self.update_input(identifier, state)
@@ -977,6 +980,14 @@ class Page:
         return self._get_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "media", "speed"]) or 1.0
 
     def set_media_speed(self, identifier: InputIdentifier, state: int, speed: float, update: bool = True) -> None:
+        speed = max(0.1, min(10.0, speed))
+        for key_state in self.get_controller_input_states(identifier, state):
+            key_state.layout_manager.page_layout.speed = speed
+            # Also update live KeyGIF speed if one is active
+            if hasattr(key_state, 'key_video') and key_state.key_video is not None:
+                if hasattr(key_state.key_video, 'speed'):
+                    key_state.key_video.speed = speed
+
         self._set_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "media", "speed"], speed)
         if update:
             self.update_input(identifier, state)
