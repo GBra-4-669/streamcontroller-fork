@@ -112,7 +112,18 @@ api_page_requests: dict[str, str] = {} # Stores api page requests made my --chan
 api_state_requests: dict[str, dict] = {} # Stores api state change requests made by --change-state
 api_action_requests: dict[str, dict] = {} # Stores api action trigger requests made by --action
 tray_icon: "TrayIcon" = None
-fallback_font: str = find_fallback_font()
+# ── Register bundled fonts with matplotlib ────────────────────────────
+import matplotlib.font_manager as _fm
+_bundled_font_dir = os.path.join(os.path.dirname(__file__), "Assets", "Fonts")
+if os.path.isdir(_bundled_font_dir):
+    for _fname in os.listdir(_bundled_font_dir):
+        if _fname.lower().endswith(('.ttf', '.otf')):
+            try:
+                _fm.fontManager.addfont(os.path.join(_bundled_font_dir, _fname))
+            except Exception:
+                pass
+
+fallback_font: str = find_fallback_font(fallback="Droid Sans Fallback")
 showed_donate_window: bool = False
 screen_locked: bool = False
 loggers: dict[str, "Logger"] = {}

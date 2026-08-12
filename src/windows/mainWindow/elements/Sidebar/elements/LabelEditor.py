@@ -441,6 +441,7 @@ class FontChooserButton(Gtk.Box):
         super().__init__(css_classes=["linked"], **kwargs)
 
         self.button = Gtk.FontButton()
+        self.button.set_preview_text("🎮 ▶ ✨ ⚡ 🔧 📁 #@ ♥ 日本語")
         self.revert_button = RevertButton()
 
         self.append(self.button)
