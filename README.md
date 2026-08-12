@@ -1,4 +1,10 @@
-# StreamController
+# StreamController fork
+
+This is an unmaintained private fork of [StreamController](https://github.com/StreamController/StreamController).
+It is provided for personal experimentation only and is not intended for production use.
+Do not open issues or pull requests here.
+
+---
 
 [![Flathub Downloads](https://img.shields.io/flathub/downloads/com.core447.StreamController?style=flat&label=Flathub%20Downloads&link=https%3A%2F%2Fflathub.org%2Fapps%2Fcom.core447.StreamController)](https://flathub.org/apps/com.core447.StreamController)
 [![Discord](https://img.shields.io/discord/1221536306367303690?label=Discord&link=https%3A%2F%2Fdiscord.gg%2FMSyHM8TN3u)](https://discord.gg/MSyHM8TN3u)
