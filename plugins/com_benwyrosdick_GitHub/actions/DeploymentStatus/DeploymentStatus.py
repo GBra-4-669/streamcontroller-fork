@@ -8,10 +8,10 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib
 
-from src.backend.PluginManager.ActionBase import ActionBase
+from ..base.GitHubActionBase import GitHubActionBase
 
 
-class DeploymentStatus(ActionBase):
+class DeploymentStatus(GitHubActionBase):
     PENDING = {"pending", "in_progress", "queued"}
     TERMINAL = {"success", "failure", "error", "inactive"}
 
@@ -22,11 +22,16 @@ class DeploymentStatus(ActionBase):
         self._lock = threading.Lock()
         self._watching = False
         self._blink = False
-        self._watch_key = (
-            f"{self.page.json_path}:{self.input_ident.json_identifier}:{self.state}"
-        )
-
+        self._blink_timer_id = None
     def _shared(self):
+        settings = self.get_settings()
+        self._watch_key = (
+            settings.get("owner", "").strip().lower(),
+            settings.get("repo", "").strip().lower(),
+            settings.get("environment", "production").strip().lower() or "production",
+            int(settings.get("timeout_seconds", 600)),
+            max(3, int(settings.get("poll_interval_seconds", 10))),
+        )
         watchers = self.plugin_base.deployment_watchers
         return watchers.setdefault(self._watch_key, {
             "state": "idle",
@@ -75,6 +80,10 @@ class DeploymentStatus(ActionBase):
         else:
             self._render(state)
 
+    def on_tick(self):
+        state = self._shared()["state"]
+        self._render(state)
+
     def on_key_down(self):
         with self._lock:
             shared = self._shared()
@@ -82,6 +91,13 @@ class DeploymentStatus(ActionBase):
                 shared["cancel"].set()
                 shared["state"] = "idle"
                 self._watching = False
+                GLib.idle_add(self._set_idle)
+                return
+            if shared["state"] in {
+                "success", "failure", "error", "inactive",
+                "no_deployment", "timeout", "auth",
+            }:
+                shared["state"] = "idle"
                 GLib.idle_add(self._set_idle)
                 return
             self._watching = True
@@ -149,33 +165,39 @@ class DeploymentStatus(ActionBase):
                 self._watching = False
         if state in self.PENDING:
             self.set_status_badge((255, 200, 0, 255))
-            self.set_center_label(None)
+            self.safe_set_label("center", "", font_size=1)
         elif state == "success":
             self.set_status_badge((0, 255, 0, 255))
-            self.set_center_label(None)
+            self.safe_set_label("center", "", font_size=1)
         elif state in {"failure", "error"}:
             self.set_status_badge((255, 0, 0, 255))
-            self.set_center_label(None)
+            self.safe_set_label("center", "", font_size=1)
         elif state == "inactive":
             self.set_status_badge((128, 128, 128, 255))
-            self.set_center_label(None)
+            self.safe_set_label("center", "", font_size=1)
         elif state == "no_deployment":
             self.set_status_badge((128, 128, 128, 255))
-            self.set_center_label("N/A")
+            self.set_top_label("N/A", font_size=14, update=False)
+            self.get_input().update()
         elif state == "timeout":
             self._blink = not self._blink
             self.set_status_badge((128, 128, 128, 255) if self._blink else None)
-            self.set_center_label("TO")
-            GLib.timeout_add(500, self._blink_timeout)
+            self.set_top_label("TO", font_size=14, update=False)
+            self.get_input().update()
+            if self._blink_timer_id is None:
+                self._blink_timer_id = GLib.timeout_add(500, self._blink_timeout)
         elif state == "auth":
             self.set_status_badge((40, 100, 220, 255))
-            self.set_center_label("AUTH")
+            self.set_top_label("AUTH", font_size=12, update=False)
+            self.get_input().update()
         elif state == "idle":
             self._set_idle()
+        self.commit_render()
         return GLib.SOURCE_REMOVE
 
     def _blink_timeout(self):
-        if self._watching:
+        self._blink_timer_id = None
+        if self._shared()["state"] == "timeout":
             self._render("timeout")
         return GLib.SOURCE_REMOVE
 
@@ -184,5 +206,6 @@ class DeploymentStatus(ActionBase):
         self._watching = False
         self._shared()["state"] = "idle"
         self.set_status_badge(None)
-        self.set_center_label(None)
+        self.safe_set_label("center", "", font_size=1)
+        self.commit_render()
         return GLib.SOURCE_REMOVE
