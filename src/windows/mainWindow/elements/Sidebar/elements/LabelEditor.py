@@ -438,6 +438,8 @@ class ColorChooserButton(Gtk.Box):
 
 CURATED_FONTS = [
     "System-ui",
+    "URW Gothic",
+    "Noto Sans Symbols",
     "Roboto",
     "Montserrat",
     "Cantarell",
