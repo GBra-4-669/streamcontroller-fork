@@ -605,6 +605,43 @@ class StreamControllerAPI:
         if not success:
             raise DBusError(ERR + "InvalidArgument", message)
 
+    @_wrap_dbus_errors
+    def TriggerDeployment(self, owner: Str, repository: Str, branch: Str) -> None:
+        """Press the configured Deployment Status action for a pushed branch."""
+        owner = owner.strip().lower()
+        repository = repository.strip().lower()
+        branch = branch.strip().lower()
+        action_id = "com_benwyrosdick_GitHub::DeploymentStatus"
+        triggered = 0
+        for controller in gl.deck_manager.deck_controller:
+            page = controller.active_page
+            if page is None:
+                continue
+            controller_triggered = False
+            for json_identifier, key_data in page.dict.get("keys", {}).items():
+                for state_data in key_data.get("states", {}).values():
+                    for action in state_data.get("actions", []):
+                        settings = action.get("settings", {})
+                        if action.get("id") != action_id:
+                            continue
+                        if (settings.get("owner", "").strip().lower() != owner or
+                                settings.get("repo", "").strip().lower() != repository or
+                                settings.get("environment", "production").strip().lower() != branch):
+                            continue
+                        success, message = controller.trigger_action(json_identifier.replace("x", ","), "press")
+                        if not success:
+                            raise DBusError(ERR + "InvalidArgument", message)
+                        triggered += 1
+                        controller_triggered = True
+                        break
+                    if controller_triggered:
+                        break
+                if controller_triggered:
+                    break
+        if not triggered:
+            raise DBusError(ERR + "NotFound",
+                            f"No active Deployment Status action matches {owner}/{repository}/deployments/{branch}")
+
     # ── Properties ───────────────────────────────────────────────────
 
     @property

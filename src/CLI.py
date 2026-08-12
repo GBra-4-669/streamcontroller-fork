@@ -79,6 +79,9 @@ def build_argparser() -> argparse.ArgumentParser:
                                "  COORDS: Position as x,y (e.g., 0,0 for top-left)\n"
                                "Example: --emulate-input press CL123456789 Main 0,0",
                           metavar=("EVENT", "SERIAL", "PAGE", "COORDS"))
+    argparser.add_argument("--trigger-deployment", action="append", nargs=3,
+                          help="Start a configured Deployment Status action. Format: OWNER REPOSITORY BRANCH",
+                          metavar=("OWNER", "REPOSITORY", "BRANCH"))
     argparser.add_argument("--list-actions", action="append", nargs=3,
                           help="List the actions configured on a StreamDeck item. Format: PAGE COORDS STATE\n"
                                "  PAGE: Page name (e.g., Main, Soundboard)\n"
@@ -269,7 +272,7 @@ def get_dbus_api():
 # before anything is parsed or imported, so a normal app start pays nothing
 # for this.
 FAST_PATH_FLAGS = frozenset((
-    "--change-page", "--change-state", "--emulate-input",
+    "--change-page", "--change-state", "--emulate-input", "--trigger-deployment",
     "--create-page", "--delete-page", "--rename-page", "--duplicate-page",
     "--export-page", "--export-all",
     "--add-state", "--remove-state",
@@ -398,6 +401,10 @@ def _dispatch(args, api) -> bool:
     for event, serial, page_name, coords in args.emulate_input or []:
         call(lambda event=event, serial=serial, page_name=page_name, coords=coords:
              api.EmulateInput(event, serial, page_name, coords))
+
+    for owner, repository, environment in args.trigger_deployment or []:
+        call(lambda owner=owner, repository=repository, environment=environment:
+             api.TriggerDeployment(owner, repository, environment))
 
     # ── Page management ─────────────────────────────────────────────
 
