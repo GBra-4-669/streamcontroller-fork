@@ -2236,7 +2236,8 @@ class LayoutManager:
             if final_image.mode != "RGBA":
                 final_image = final_image.convert("RGBA")
             alpha = final_image.getchannel("A")
-            alpha = alpha.point(lambda p: int(p * layout.opacity))
+            lut = [int(i * layout.opacity) for i in range(256)]
+            alpha = alpha.point(lut)
             final_image.putalpha(alpha)
 
         return final_image

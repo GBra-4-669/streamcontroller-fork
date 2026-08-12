@@ -71,7 +71,8 @@ class ImageLayer:
             if scaled_image.mode != "RGBA":
                 scaled_image = scaled_image.convert("RGBA")
             alpha = scaled_image.getchannel("A")
-            alpha = alpha.point(lambda p: int(p * self.opacity))
+            lut = [int(i * self.opacity) for i in range(256)]
+            alpha = alpha.point(lut)
             scaled_image.putalpha(alpha)
 
         x_offset = (base_size[0] - new_width) // 2

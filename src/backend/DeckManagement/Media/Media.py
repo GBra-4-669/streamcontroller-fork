@@ -125,7 +125,8 @@ class Media:
             if base_image.mode != "RGBA":
                 base_image = base_image.convert("RGBA")
             alpha = base_image.getchannel("A")
-            alpha = alpha.point(lambda p: int(p * self.opacity))
+            lut = [int(i * self.opacity) for i in range(256)]
+            alpha = alpha.point(lut)
             base_image.putalpha(alpha)
 
         return base_image
