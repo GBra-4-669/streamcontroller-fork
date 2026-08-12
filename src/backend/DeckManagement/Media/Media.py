@@ -122,6 +122,8 @@ class Media:
 
         # Apply global media opacity
         if self.opacity < 1.0:
+            if base_image.mode != "RGBA":
+                base_image = base_image.convert("RGBA")
             alpha = base_image.getchannel("A")
             alpha = alpha.point(lambda p: int(p * self.opacity))
             base_image.putalpha(alpha)

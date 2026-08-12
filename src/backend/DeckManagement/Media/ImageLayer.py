@@ -68,6 +68,8 @@ class ImageLayer:
 
         # Apply layer opacity
         if self.opacity < 1.0:
+            if scaled_image.mode != "RGBA":
+                scaled_image = scaled_image.convert("RGBA")
             alpha = scaled_image.getchannel("A")
             alpha = alpha.point(lambda p: int(p * self.opacity))
             scaled_image.putalpha(alpha)
