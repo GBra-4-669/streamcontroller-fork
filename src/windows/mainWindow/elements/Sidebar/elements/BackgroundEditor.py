@@ -102,14 +102,21 @@ class ColorRow(Adw.PreferencesRow):
         self.build()
 
     def build(self):
-        self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, hexpand=True,
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True,
                                 margin_start=15, margin_end=15, margin_top=15, margin_bottom=15)
         self.set_child(self.main_box)
 
+        self.color_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, hexpand=True)
         self.label = Gtk.Label(label=gl.lm.get("background-editor.color.label"), xalign=0, hexpand=True)
-        self.main_box.append(self.label)
+        self.color_box.append(self.label)
         self.button = ColorButton(self)
-        self.main_box.append(self.button)
+        self.color_box.append(self.button)
+        self.main_box.append(self.color_box)
+        self.opacity_row = Adw.SpinRow.new_with_range(0, 100, 1)
+        self.opacity_row.set_title("Opacity (%)")
+        self.opacity_row.set_value(100)
+        self.opacity_row.connect("changed", self.on_change_opacity)
+        self.main_box.append(self.opacity_row)
 
         self.color_dialog = Gtk.ColorDialog(title=gl.lm.get("background-editor.color.dialog.title"))
 
@@ -139,18 +146,24 @@ class ColorRow(Adw.PreferencesRow):
         green = round(color.green * 255)
         blue = round(color.blue * 255)
         red = round(color.red * 255)
-        alpha = round(color.alpha * 255)
+        alpha = round(self.opacity_row.get_value() / 100 * 255)
 
         active_page = gl.app.main_win.get_active_page()
         active_page.set_background_color(identifier=self.active_identifier, state=self.active_state, color=[red, green, blue, alpha], update_ui=False)
 
         self.button.revert_button.set_visible(True)
 
+    def on_change_opacity(self, row):
+        color = self.button.button.get_rgba()
+        color.alpha = row.get_value() / 100
+        self.button.button.set_rgba(color)
+
     def on_revert(self, *args):
         self.disconnect_signals()
         active_page = gl.app.main_win.get_active_page()
         active_page.set_background_color(identifier=self.active_identifier, state=self.active_state, color=None, update_ui=True)
         self.button.revert_button.set_visible(False)
+        self.opacity_row.set_value(100)
         self.connect_signals()
 
     def load_for_identifier(self, identifier: InputIdentifier, state: int):
@@ -175,6 +188,7 @@ class ColorRow(Adw.PreferencesRow):
         color = c_state.background_manager.get_composed_color()
 
         self.set_color(color)
+        self.opacity_row.set_value(color[3] / 255 * 100 if color[3] else 100)
 
         self.button.revert_button.set_visible(c_state.background_manager.get_use_page_background())
 
