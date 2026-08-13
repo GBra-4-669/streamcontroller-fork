@@ -26,6 +26,7 @@ class GitHubPlugin(PluginBase):
         self.lm = self.locale_manager
         self.backend = GitHubBackend()
         self.deployment_watchers = {}
+        self.deployment_auto_triggers = set()
 
         # Generic async value cache. Every backend read hits the network, so it
         # must never run on the UI thread: getters return the cached value
