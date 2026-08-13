@@ -628,23 +628,26 @@ class StreamControllerAPI:
                                 settings.get("repo", "").strip().lower() != repository or
                                 settings.get("environment", "production").strip().lower() != branch):
                             continue
-                        existing_state = "idle"
-                        action_objects = page.action_objects.get("keys", {}).get(json_identifier, {})
-                        live_actions = action_objects.get(int(state_data), {})
-                        for index, live_action in live_actions.items():
-                            if index < len(state_data.get("actions", [])) and state_data["actions"][index] is action:
-                                if hasattr(live_action, "_shared"):
-                                    existing_state = live_action._shared().get("state", "idle")
-                                break
                         success, message = controller.trigger_action(json_identifier.replace("x", ","), "press")
                         if not success:
                             raise DBusError(ERR + "InvalidArgument", message)
-                        if existing_state != "idle":
-                            GLib.timeout_add(
-                                150,
-                                lambda controller=controller, coords=json_identifier.replace("x", ","):
-                                controller.trigger_action(coords, "press") and GLib.SOURCE_REMOVE,
+                        def restart_if_cleared(
+                            controller=controller,
+                            coords=json_identifier.replace("x", ","),
+                            owner=owner,
+                            repository=repository,
+                            branch=branch,
+                        ):
+                            plugin = gl.plugin_manager.get_plugin_by_id("com_benwyrosdick_GitHub")
+                            active = any(
+                                key[:3] == (owner, repository, branch) and value.get("state") != "idle"
+                                for key, value in plugin.deployment_watchers.items()
                             )
+                            if not active:
+                                controller.trigger_action(coords, "press")
+                            return GLib.SOURCE_REMOVE
+
+                        GLib.timeout_add(300, restart_if_cleared)
                         triggered += 1
                         controller_triggered = True
                         break
