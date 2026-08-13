@@ -628,8 +628,11 @@ class StreamControllerAPI:
                                 settings.get("repo", "").strip().lower() != repository or
                                 settings.get("environment", "production").strip().lower() != branch):
                             continue
+                        plugin = gl.plugin_manager.get_plugin_by_id("com_benwyrosdick_GitHub")
+                        plugin.deployment_auto_triggers.add((owner, repository, branch))
                         success, message = controller.trigger_action(json_identifier.replace("x", ","), "press")
                         if not success:
+                            plugin.deployment_auto_triggers.discard((owner, repository, branch))
                             raise DBusError(ERR + "InvalidArgument", message)
                         def restart_if_cleared(
                             controller=controller,

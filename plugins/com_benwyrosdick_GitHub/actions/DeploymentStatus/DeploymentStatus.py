@@ -103,6 +103,13 @@ class DeploymentStatus(GitHubActionBase):
             self._watching = True
             shared["cancel"] = threading.Event()
             shared["state"] = "pending"
+            trigger_key = (
+                self.get_settings().get("owner", "").strip().lower(),
+                self.get_settings().get("repo", "").strip().lower(),
+                self.get_settings().get("environment", "production").strip().lower() or "production",
+            )
+            shared["wait_for_new"] = trigger_key in self.plugin_base.deployment_auto_triggers
+            self.plugin_base.deployment_auto_triggers.discard(trigger_key)
             self._cancel = shared["cancel"]
         self._render("pending")
         threading.Thread(target=self._watch, daemon=True, name="github-deployment-watch").start()
@@ -127,6 +134,23 @@ class DeploymentStatus(GitHubActionBase):
             return
 
         started = time.monotonic()
+        if self._shared().get("wait_for_new"):
+            baseline_id = deployment_id
+            deployment_id = ""
+            while not self._cancel.is_set() and time.monotonic() - started < timeout:
+                deployment_id, error = self._gh(
+                    f"repos/{owner}/{repo}/deployments?environment={environment}&per_page=1",
+                    ".[0].id",
+                )
+                if error:
+                    GLib.idle_add(self._render, "auth")
+                    return
+                if deployment_id and deployment_id != baseline_id:
+                    break
+                self._cancel.wait(interval)
+            if not deployment_id or deployment_id == baseline_id:
+                GLib.idle_add(self._render, "timeout")
+                return
         while not self._cancel.is_set():
             if time.monotonic() - started >= timeout:
                 GLib.idle_add(self._render, "timeout")
