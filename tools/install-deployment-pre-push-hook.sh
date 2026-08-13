@@ -11,7 +11,7 @@ usage() {
 Usage:
   install-deployment-pre-push-hook.sh install --repo PATH --owner OWNER --github-repo REPO \
     --environment ENV [--cli PATH] [--branches "main master github-pages"]
-  install-deployment-pre-push-hook.sh uninstall --repo PATH
+  install-deployment-pre-push-hook.sh uninstall --repo PATH [--yes]
 EOF
 }
 
@@ -52,7 +52,7 @@ install_hook() {
     local hook="$git_dir/hooks/pre-push"
     mkdir -p "$git_dir/hooks"
 
-    if [[ -e "$hook" ]]; then
+    if [[ -e "$hook" ]] && ! grep -qF "$MARKER" "$hook"; then
         echo "Refusing to overwrite existing hook: $hook" >&2
         echo "Inspect it and chain it manually, or uninstall the existing hook first." >&2
         return 1
@@ -78,10 +78,11 @@ EOF
 }
 
 uninstall_hook() {
-    local repo=""
+    local repo="" confirm=0
     while (($#)); do
         case "$1" in
             --repo) repo=$2; shift 2 ;;
+            --yes) confirm=1; shift ;;
             *) echo "Unknown option: $1" >&2; usage; return 2 ;;
         esac
     done
@@ -96,8 +97,13 @@ uninstall_hook() {
         echo "Existing hook is not owned by StreamController; refusing to remove it: $hook" >&2
         return 1
     fi
-    echo "Remove the StreamController hook at $hook? [y/N]"
-    read -r answer
+    answer=n
+    if [[ "$confirm" -eq 1 ]]; then
+        answer=y
+    else
+        echo "Remove the StreamController hook at $hook? [y/N]"
+        read -r answer
+    fi
     [[ "$answer" = y || "$answer" = Y ]] || { echo "Cancelled."; return 0; }
     rm "$hook"
     echo "Removed $hook"
