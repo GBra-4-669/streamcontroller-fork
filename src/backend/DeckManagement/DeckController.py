@@ -1808,9 +1808,9 @@ class KeyGIF(SingleKeyAsset):
     def __init__(self, controller_key: "ControllerKey", gif_path: str, fps: int = 30, loop: bool = True, speed: float = 1.0):
         super().__init__(controller_key)
         self.gif_path = gif_path
-        self.fps = fps
+        self.fps = fps or 30
         self.loop = loop
-        self.speed = max(0.1, min(10.0, speed))  # Clamp speed to avoid extremes
+        self.speed = max(0.1, min(10.0, speed or 1.0))  # Clamp speed to avoid extremes
 
         self.active_frame: int = -1
 
@@ -3115,7 +3115,7 @@ class ControllerKey(ControllerInput):
                             video_class = KeyGIF if os.path.splitext(path)[1].lower() == ".gif" else InputVideo
                             if video_class is KeyGIF:
                                 set_video(KeyGIF(controller_key=self, gif_path=path, loop=media.get("loop", True),
-                                                 fps=media.get("fps", 30), speed=media.get("speed", 1.0)))
+                                                 fps=media.get("fps", 30), speed=media.get("speed") or 1.0))
                             else:
                                 set_video(InputVideo(controller_input=self, video_path=path, loop=media.get("loop", True),
                                                      fps=media.get("fps", 30)))

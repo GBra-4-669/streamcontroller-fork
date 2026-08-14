@@ -928,7 +928,7 @@ class Page:
             if property_name == "speed":
                 video = key_state.key_video if media_key == "media" else getattr(key_state, "media_2_video", None)
                 if video is not None and hasattr(video, "speed"):
-                    video.speed = value
+                    video.speed = value or 1.0
 
         self._set_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), media_key, property_name], value)
         if update:
