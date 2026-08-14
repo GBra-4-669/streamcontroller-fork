@@ -44,8 +44,8 @@ import json
 import os
 import sys
 
-DBUS_NAME = "com.core447.StreamController"
-DBUS_PATH = "/com/core447/StreamController"
+DBUS_NAME = "com.gb.streamdeckgb"
+DBUS_PATH = "/com/gb/streamdeckgb"
 
 MAX_REASONABLE_X = 10
 MAX_REASONABLE_Y = 10
@@ -252,7 +252,7 @@ def print_emulate_input_usage() -> None:
 def get_dbus_api():
     """
     One-shot blocking connection to a running instance's rich API
-    (com.core447.StreamController, see src/api.py), or None if no instance
+    (com.gb.streamdeckgb, see src/api.py), or None if no instance
     answers. Never attached to a mainloop - see tests/test_dbus_mainloop.py.
     """
     if sys.platform == "darwin":

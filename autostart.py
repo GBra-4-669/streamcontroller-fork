@@ -73,7 +73,7 @@ def setup_autostart_flatpak(enable: bool = True):
         # Request Autostart
         xdp.request_background(
             None,  # parent
-            "Autostart StreamController",  # reason
+            "Autostart StreamDeckGB",  # reason
             ["/app/bin/launch.sh", "--daemon-only"],  # commandline
             flag,
             None,  # cancellable
@@ -91,7 +91,7 @@ def setup_autostart_desktop_entry(enable: bool = True, native: bool = False):
 
     xdg_config_home = os.path.join(os.environ.get("HOME"), ".config")
     AUTOSTART_DIR = os.path.join(xdg_config_home, "autostart")
-    AUTOSTART_DESKTOP_PATH = os.path.join(AUTOSTART_DIR, "StreamController.desktop")
+    AUTOSTART_DESKTOP_PATH = os.path.join(AUTOSTART_DIR, "com.gb.streamdeckgb.desktop")
 
     if enable:
         try:

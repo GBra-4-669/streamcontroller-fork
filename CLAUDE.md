@@ -10,7 +10,7 @@ If a larger change genuinely makes sense (the small fix would paper over a real 
 
 ## What this is
 
-StreamController is a GTK4/libadwaita desktop app (Python 3.14) that drives Elgato Stream Deck hardware on Linux. It ships primarily as a Flatpak (`com.core447.StreamController`) and has a plugin system where third-party plugins are downloaded from a store into the user's data dir and loaded at runtime.
+StreamDeckGB is a GTK4/libadwaita desktop app (Python 3.14) that drives Elgato Stream Deck hardware on Linux. It ships primarily as a Flatpak (`com.gb.streamdeckgb`) and has a plugin system where third-party plugins are downloaded from a store into the user's data dir and loaded at runtime.
 
 ## Commands
 
@@ -21,7 +21,7 @@ python3 main.py --devel --data data --close-running
 ```
 
 - `--devel` disables auto-update of store assets and forces the default data path logic to be skipped.
-- `--data <dir>` points the data dir at the repo-local `data/` folder instead of `~/.var/app/com.core447.StreamController/data`.
+- `--data <dir>` points the data dir at the repo-local `data/` folder instead of `~/.var/app/com.gb.streamdeckgb/data`.
 - `--close-running` quits an already-running instance over D-Bus instead of just re-focusing it (without it, a second launch activates `reopen` on the existing instance and exits).
 - Other useful flags: `--skip-load-hardware-decks`, `--daemon-only`, `-b` (start in background), `--list-devices`, `--list-pages`, `--list-actions PAGE COORDS STATE`, `--change-page SERIAL PAGE`, `--change-state SERIAL PAGE COORDS STATE`, `--emulate-input press|long-press SERIAL PAGE COORDS`, plus the page/label/icon/state/brightness get/set flags (`--set-icon PAGE COORDS STATE PATH` & co, `--json` for machine-readable reads).
 
@@ -36,11 +36,11 @@ Flatpak build:
 
 ```sh
 git submodule update --init   # needed if flatpak/shared-modules is empty
-flatpak-builder --repo=repo --force-clean --install --user build-dir com.core447.StreamController.yml
+flatpak-builder --repo=repo --force-clean --install --user build-dir com.gb.streamdeckgb.yml
 bash flatpak/install.sh --repo=current --branch=<branch>   # build the local checkout as a flatpak
 ```
 
-Releasing a version: bump `app_version` and `release_notes` in `globals.py`, then run `python3 scripts/update_metainfo.py` to regenerate `flatpak/com.core447.StreamController.metainfo.xml` from them. The flatpak manifest's `StreamController` module pins a git `tag` that also needs updating.
+Releasing a version: bump `app_version` and `release_notes` in `globals.py`, then run `python3 scripts/update_metainfo.py` to regenerate `flatpak/com.gb.streamdeckgb.metainfo.xml` from them. The flatpak manifest's `StreamDeckGB` module pins a git `tag` that also needs updating.
 
 There is no linter or formatter configured.
 
@@ -94,7 +94,7 @@ There is no linter or formatter configured.
 ### Cross-cutting
 
 - `src/Signals/` is a small app-wide pub/sub (`PageRename`, `ChangePage`, `PluginInstall`, `AppQuit`, …). `SignalManager.trigger_signal()` dispatches via `GLib.idle_add` for everything except `AppQuit`, which runs synchronously.
-- `src/api.py` exposes the dasbus/GDBus API at `com.core447.StreamController` for external tools (controllers, pages, active window, icon packs).
+- `src/api.py` exposes the dasbus/GDBus API at `com.gb.streamdeckgb` for external tools (controllers, pages, active window, icon packs).
 - `src/backend/Store/StoreBackend.py` talks to the plugin/icon/wallpaper store (GitHub-hosted), with `StoreCache` for offline use.
 - `src/backend/Migration/` runs versioned migrators over the data dir at startup; add a new `Migrator_x_y_z` and register it in `main()` when the on-disk format changes.
 - Localization: `locales/locales.csv` (semicolon-separated, `key;de_DE;en_US;…`) via `LocaleManager`; plugins may use the older per-folder JSON `LegacyLocaleManager`.

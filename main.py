@@ -24,7 +24,7 @@ if run_against_running_instance():
 # Import Python modules
 import setproctitle
 
-setproctitle.setproctitle("StreamController")
+setproctitle.setproctitle("StreamDeckGB")
 
 # "install" patches
 from src.patcher.patcher import Patcher
@@ -151,7 +151,7 @@ def load():
     log.info("Loading app")
     gl.deck_manager = DeckManager()
     gl.deck_manager.load_decks()
-    gl.main = Main(application_id="com.core447.StreamController", deck_manager=gl.deck_manager)
+    gl.main = Main(application_id="com.gb.streamdeckgb", deck_manager=gl.deck_manager)
 
 @log.catch
 def create_cache_folder():
@@ -326,7 +326,7 @@ def quit_running():
     obj: dbus.BusObject = None
     action_interface: dbus.Interface = None
     try:
-        obj = session_bus.get_object("com.core447.StreamController", "/com/core447/StreamController")
+        obj = session_bus.get_object("com.gb.streamdeckgb", "/com/gb/streamdeckgb")
         action_interface = dbus.Interface(obj, "org.gtk.Actions")
     except dbus.exceptions.DBusException as e:
         log.info("No other instance running, continuing")
@@ -559,7 +559,7 @@ def handle_listing_commands():
                 print(json.dumps({"error": f"Pages directory not found: {pages_dir}", "pages": []}))
             else:
                 print(f"Pages directory not found: {pages_dir}")
-                print("\nThis might mean StreamController hasn't been set up yet.")
+                print("\nThis might mean StreamDeckGB hasn't been set up yet.")
             return True
 
         page_files = sorted(f for f in os.listdir(pages_dir) if f.endswith('.json') and not f.startswith('.'))
@@ -753,7 +753,7 @@ def handle_extended_commands():
         nonlocal had_error
         try:
             if live_needed:
-                raise ops.HeadlessOpError("StreamController must be running for this command")
+                raise ops.HeadlessOpError("StreamDeckGB must be running for this command")
             return headless_call()
         except (ops.HeadlessOpError, ValueError) as e:
             _report_error(e)

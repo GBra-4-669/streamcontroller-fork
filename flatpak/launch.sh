@@ -1,3 +1,3 @@
 #!/bin/bash
-cd /app/bin/StreamController
-python3 /app/bin/StreamController/main.py "$@"
+cd /app/bin/StreamDeckGB
+python3 /app/bin/StreamDeckGB/main.py "$@"

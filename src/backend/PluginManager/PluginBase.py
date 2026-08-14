@@ -114,7 +114,7 @@ class PluginBase(rpyc.Service):
             plugin_name (str, optional): The name of the plugin. Defaults to None.
             github_repo (str, optional): The GitHub repository of the plugin. Defaults to None.
             plugin_version (str, optional): The version of the plugin. Defaults to None.
-            app_version (str, optional): The version of StreamController. Defaults to None.
+            app_version (str, optional): The version of StreamDeckGB. Defaults to None.
 
         Raises:
             ValueError: If the plugin name is not specified or if the plugin already exists.
@@ -173,19 +173,19 @@ class PluginBase(rpyc.Service):
             reason = None
 
             if self._get_parsed_base_version(self.min_app_version) > self._get_parsed_base_version(gl.app_version):
-                # Plugin is too new - StreamController is too old
+                # Plugin is too new - StreamDeckGB is too old
                 log.warning(
-                    f"Plugin {self.plugin_id} is not compatible with this version of StreamController. "
-                    f"Please update StreamController! Plugin requires app version {self.min_app_version} "
+                    f"Plugin {self.plugin_id} is not compatible with this version of StreamDeckGB. "
+                    f"Please update StreamDeckGB! Plugin requires app version {self.min_app_version} "
                     f"you are running version {gl.app_version}. Disabling plugin."
                 )
                 reason = "app-out-of-date"
 
             elif version.parse(self.app_version).major != version.parse(gl.app_version).major:
-                # Plugin is too old - StreamController is too new
+                # Plugin is too old - StreamDeckGB is too new
                 max_version = f"{version.parse(self.app_version).major}.x.x"
                 log.warning(
-                    f"Plugin {self.plugin_id} is not compatible with this version of StreamController. "
+                    f"Plugin {self.plugin_id} is not compatible with this version of StreamDeckGB. "
                     f"Please update your assets! Plugin requires an app version between {self.min_app_version} and {max_version} "
                     f"you are running version {gl.app_version}. Disabling plugin."
                 )

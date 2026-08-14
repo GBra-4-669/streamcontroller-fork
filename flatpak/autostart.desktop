@@ -1,5 +1,5 @@
 [Desktop Entry]
 Type=Application
-Name=com.core447.StreamController
-Exec=flatpak run --command=/app/bin/launch.sh com.core447.StreamController --daemon-only
-X-Flatpak=com.core447.StreamController
+Name=StreamDeckGB
+Exec=flatpak run --command=/app/bin/launch.sh com.gb.streamdeckgb --daemon-only
+X-Flatpak=com.gb.streamdeckgb

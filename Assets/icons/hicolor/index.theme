@@ -1,6 +1,6 @@
 [Icon Theme]
 Name=Hicolor
-Comment=Icons bundled with StreamController
+Comment=Icons bundled with StreamDeckGB
 Directories=48x48/apps,512x512/apps,scalable/actions,scalable/apps,scalable/categories,scalable/devices,scalable/mimetypes,scalable/places,scalable/status
 
 [48x48/apps]

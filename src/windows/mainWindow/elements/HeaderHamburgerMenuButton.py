@@ -117,7 +117,7 @@ class HeaderHamburgerMenuButton(Gtk.MenuButton):
 
     def on_open_about(self, action, parameter):
         self.about = Adw.AboutDialog()
-        self.about.set_application_name("StreamController")
+        self.about.set_application_name("StreamDeckGB")
 
         app_version = gl.app_version
         if gl.argparser.parse_args().devel:
@@ -136,7 +136,7 @@ class HeaderHamburgerMenuButton(Gtk.MenuButton):
                                                        key=str.casefold))
         
         self.about.set_copyright("Copyright (C) 2024 Core447")
-        self.about.set_application_icon("com.core447.StreamController")
+        self.about.set_application_icon("com.gb.streamdeckgb")
         self.about.set_visible(True)
 
         self.about.add_legal_section(
@@ -148,7 +148,7 @@ class HeaderHamburgerMenuButton(Gtk.MenuButton):
 
         self.about.add_legal_section(
             "Icons",
-            "StreamController uses and ships Adwaita icons",
+            "StreamDeckGB uses and ships Adwaita icons",
             license_type=Gtk.License.CUSTOM,
             license=None
         )
@@ -181,7 +181,7 @@ class HeaderHamburgerMenuButton(Gtk.MenuButton):
         )
 
         self.about.set_debug_info("".join(gl.logs))
-        self.about.set_debug_info_filename(os.path.join(gl.DATA_PATH, "StreamController.log"))
+        self.about.set_debug_info_filename(os.path.join(gl.DATA_PATH, "StreamDeckGB.log"))
 
         self.about.set_release_notes(gl.release_notes)  
         self.about.set_release_notes_version(gl.app_version)

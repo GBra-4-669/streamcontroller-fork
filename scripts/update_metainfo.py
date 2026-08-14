@@ -5,7 +5,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GLOBALS_PATH = REPO_ROOT / "globals.py"
-METAINFO_PATH = REPO_ROOT / "flatpak" / "com.core447.StreamController.metainfo.xml"
+METAINFO_PATH = REPO_ROOT / "flatpak" / "com.gb.streamdeckgb.metainfo.xml"
 
 
 def read_globals() -> tuple[str, str]:

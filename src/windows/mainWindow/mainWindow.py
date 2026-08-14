@@ -49,6 +49,7 @@ class MainWindow(Adw.ApplicationWindow):
     def __init__(self, deck_manager, **kwargs):
         gl.app.main_win = self
         super().__init__(**kwargs)
+        self.set_title("StreamDeckGB")
         self.deck_manager = deck_manager
 
         # Store copied stuff
@@ -95,7 +96,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.split_view = Adw.NavigationSplitView()
         self.set_content(self.split_view)
 
-        self.content_page = Adw.NavigationPage(title="StreamController")
+        self.content_page = Adw.NavigationPage(title="StreamDeckGB")
         self.split_view.set_content(self.content_page)
 
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)

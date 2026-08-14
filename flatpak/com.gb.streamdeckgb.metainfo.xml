@@ -2,16 +2,16 @@
 
 <!-- Copyright 2024 Core447 -->
 <component type="desktop-application">
-  <id>com.core447.StreamController</id>
+  <id>com.gb.streamdeckgb</id>
 
   <developer_name translate="no">Core447</developer_name>
   <developer id="com.core447">
     <name translate="no">Core447</name>
   </developer>
 
-  <launchable type="desktop-id">com.core447.StreamController.desktop</launchable>
+  <launchable type="desktop-id">com.gb.streamdeckgb.desktop</launchable>
 
-  <name>StreamController</name>
+  <name>StreamDeckGB</name>
   <summary>Control your Elgato Stream Decks with plugin support</summary>
 
   <metadata_license>CC-BY-4.0</metadata_license>
