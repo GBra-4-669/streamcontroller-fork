@@ -8,10 +8,10 @@ import globals as gl
 from src.backend.trayicon import DBusTrayIcon, DBusMenu
 
 class TrayIcon(DBusTrayIcon):
-    MenuPath = "/com/core447/StreamController/Menu"
-    IndicatorPath = "/org/ayatana/NotificationItem/com_core447_StreamController_TrayIcon"
-    AppId = "com.core447.StreamController.TrayIcon"
-    IconName = "com.core447.StreamController"
+    MenuPath = "/com/gb/streamdeckgb/Menu"
+    IndicatorPath = "/org/ayatana/NotificationItem/com_gb_streamdeckgb_TrayIcon"
+    AppId = "com.gb.streamdeckgb.TrayIcon"
+    IconName = "com.gb.streamdeckgb"
 
     def __init__(self):
         if gl.IS_MAC:
@@ -25,9 +25,9 @@ class TrayIcon(DBusTrayIcon):
         self.menu.add_menu_item(6, menu_type="separator")
         self.menu.add_menu_item(7, "Quit", callback=self.on_quit)
         self.menu.add_menu_item(8, "Quit and Restart", callback=self.on_restart)
-        super().__init__(self.menu, self.IndicatorPath, self.MenuPath, self.AppId, "StreamController")
+        super().__init__(self.menu, self.IndicatorPath, self.MenuPath, self.AppId, "StreamDeckGB")
         self.set_icon(self.IconName, path=self.get_icon_theme_path())
-        self.set_tooltip("StreamController")
+        self.set_tooltip("StreamDeckGB")
 
         self.main_win = None
         self.show_about_action = None
@@ -45,11 +45,7 @@ class TrayIcon(DBusTrayIcon):
         the theme once a path is set, so only hand out a path if the icon is missing from the
         installed theme, which is the case when running from source.
         """
-        for data_dir in [GLib.get_user_data_dir(), *GLib.get_system_data_dirs()]:
-            if glob.glob(os.path.join(data_dir, "icons", "*", "*", "apps", f"{self.IconName}.*")):
-                return ""
-
-        log.info(f"{self.IconName} is not in an installed icon theme, pointing the tray at our own assets")
+        log.info(f"{self.IconName} using the bundled StreamDeckGB icon")
         return os.path.join(gl.MAIN_PATH, "Assets", "icons")
 
     @log.catch
@@ -116,7 +112,7 @@ exec "$@"
 """
 
         subprocess.Popen(
-            ["/bin/sh", "-c", restart_script, "streamcontroller-restart", pid, *restart_cmd],
+            ["/bin/sh", "-c", restart_script, "streamdeckgb-restart", pid, *restart_cmd],
             cwd=gl.MAIN_PATH,
             start_new_session=True,
             stdout=subprocess.DEVNULL,
@@ -139,11 +135,11 @@ exec "$@"
 #     def __init__(self):
 #         icon_image = Image.open("flatpak/icon_256.png")
 #         menu = Menu(
-#             MenuItem("StreamController", enabled=False, action=None),
+#             MenuItem("StreamDeckGB", enabled=False, action=None),
 #             MenuItem("Open", self.on_open),
 #             MenuItem("Quit", self.on_quit)
 #         )
-#         super().__init__("StreamController", icon_image, menu=menu, title="StreamController")
+#         super().__init__("StreamDeckGB", icon_image, menu=menu, title="StreamDeckGB")
 
 #     def on_open(self):
 #         print("Open")

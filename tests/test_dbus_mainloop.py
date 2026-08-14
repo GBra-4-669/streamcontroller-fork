@@ -8,7 +8,7 @@ message, while the main loop dispatches those same sources and
 io_handler_dispatch dereferences handler->watch with no NULL check.
 
 Installing the main loop attaches every dbus.SessionBus() in the process,
-including the shared one plugins get. Because StreamController reaches D-Bus
+including the shared one plugins get. Because StreamDeckGB reaches D-Bus
 from the per-deck tick threads via plugin on_tick(), that turns into a random
 SIGABRT after hours or days of uptime:
 

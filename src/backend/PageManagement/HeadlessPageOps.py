@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 """
-Disk-only page editing used by the CLI when no StreamController instance is
+Disk-only page editing used by the CLI when no StreamDeckGB instance is
 running to answer over DBus.
 
 Page (src/backend/PageManagement/Page.py) cannot be used here: its
@@ -21,7 +21,7 @@ load_action_objects() dereferences self.deck_controller.deck unconditionally,
 so a Page always needs a live DeckController to even construct. Everything
 below instead reads/writes the page JSON directly, mirroring the exact key
 layout Page._get_dict_value/_set_dict_value use, so files stay identical
-either way. When a StreamController instance is running, the CLI talks to it
+either way. When a StreamDeckGB instance is running, the CLI talks to it
 over DBus instead (src/api.py), which goes through the real Page methods and
 therefore also updates any live UI.
 """

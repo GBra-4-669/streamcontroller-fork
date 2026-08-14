@@ -295,7 +295,7 @@ class App(Adw.Application):
         # Stop timer
         # Balance any outstanding hold so Gio.Application can clean up.
         self.set_keep_running_hold(False)
-        log.success("Stopped StreamController. Have a nice day!")
+        log.success("Stopped StreamDeckGB. Have a nice day!")
         log.stop()
         sys.exit(0)
 
@@ -384,7 +384,7 @@ class App(Adw.Application):
         if button:
             notif.add_button_with_target(button[0], button[1], button[2])
 
-        GLib.idle_add(super().send_notification, "com.core447.StreamController", notif)
+        GLib.idle_add(super().send_notification, "com.gb.streamdeckgb", notif)
 
     def send_outdated_plugin_notification(self, plugin_id: str) -> None:
         self.send_notification(

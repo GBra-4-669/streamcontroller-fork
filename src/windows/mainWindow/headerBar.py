@@ -117,7 +117,7 @@ class HeaderBar(Gtk.HeaderBar):
 
     def on_open_about(self, action, parameter):
         self.about = Adw.AboutWindow(transient_for=self.main_window)
-        self.about.set_application_name("StreamController")
+        self.about.set_application_name("StreamDeckGB")
         self.about.set_version(gl.app_version)
         self.about.set_developers(["Core447"])
         self.about.set_developer_name("Core447")
@@ -127,7 +127,7 @@ class HeaderBar(Gtk.HeaderBar):
         self.about.set_issue_url("https://github.com/StreamController/StreamController/issues")
         self.about.add_credit_section("Contributors", ["Core447"])
         self.about.set_copyright("Copyright (C) 2024 Core447")
-        self.about.set_application_icon("com.core447.StreamController")
+        self.about.set_application_icon("com.gb.streamdeckgb")
         self.about.set_visible(True)
 
         self.about.add_legal_section(

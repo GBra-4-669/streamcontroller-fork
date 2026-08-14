@@ -1,104 +1,49 @@
-# StreamController fork
+# StreamDeckGB
 
-This is an unmaintained private fork of [StreamController](https://github.com/StreamController/StreamController).
-It is provided for personal experimentation only and is not intended for production use.
-Do not open issues or pull requests here.
+A personal fork of [StreamController](https://github.com/StreamController/StreamController) with a handful of quality-of-life changes I use on my own Stream Deck.
 
----
+> **This is a private, unmaintained fork.** The repository is public only so I can use GitHub's tooling (Pages, Actions, and releases) for my own testing. Treat it as a snapshot of my working tree, not as software meant for general use.
 
-[![Flathub Downloads](https://img.shields.io/flathub/downloads/com.core447.StreamController?style=flat&label=Flathub%20Downloads&link=https%3A%2F%2Fflathub.org%2Fapps%2Fcom.core447.StreamController)](https://flathub.org/apps/com.core447.StreamController)
-[![Discord](https://img.shields.io/discord/1221536306367303690?label=Discord&link=https%3A%2F%2Fdiscord.gg%2FMSyHM8TN3u)](https://discord.gg/MSyHM8TN3u)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Made with Python](https://img.shields.io/badge/Made%20with-Python-ff7b3f.svg)](https://www.python.org/)
-[![Flathub Version](https://img.shields.io/flathub/v/com.core447.StreamController?label=Flathub%20Version)](https://flathub.org/apps/com.core447.StreamController)
+- **No prebuilt binaries.** There is no installer and no release build.
+- **No support.** This will almost certainly not run as-is on your machine; expect to read and modify the source to make it work on your own setup.
+- **Use at your own risk.**.
 
-**StreamController** is an elegant Linux application designed for the Elgato Stream Deck, offering advanced features like plug-ins and automatic page switching to enhance your streaming and productivity setup.
+All credit for the core application goes to the [StreamController](https://github.com/StreamController/StreamController) team. Please star, contribute to, and use the upstream project — not this one. This fork exists only to scratch a few personal itches on my own hardware.
 
-![Main Screen](https://streamcontroller.core447.com/assets/screenshots/main_screen.png)  
-*Background image by [kvacm](https://kvacm.artstation.com)*
+## What's different from upstream
 
-## In Action
-[![YouTube](http://i.ytimg.com/vi/kIJOj_6Jimk/hqdefault.jpg)](https://www.youtube.com/watch?v=kIJOj_6Jimk)  
-(click on the image to play)
+- **Background opacity** — opacity control for all backgrounds (page and key backgrounds), not just foreground images.
+- **Layered images per key** — each key can hold two images, each with its own opacity, composited over the page background. For example: page background + one GIF + one icon per key.
+- **Smart Command** — a new stateful action type. See the source for current behavior; it is actively evolving as I use it and has no stable spec.
+- **Watch GitHub Deployments** — a new action/plugin that polls a repository's GitHub deployment status and reflects it on a key.
+- **Static WebP support** — support for static `.webp` images as key and background assets.
+- **GIF speed fix** — corrected a logic error in animated GIF playback that made GIFs play at the wrong speed relative to their frame delays.
 
-@danie10 created this amazing video going over all the details and features of StreamController. You can use the available timestamps to jump to specific parts of the video.
+## Tested on
 
-## Supported Devices
+- Arch Linux
+- Fedora 44
+- One Stream Deck model: the 5×3 grid
 
-StreamController supports the following Elgato Stream Deck models:
+That is the full list. I have not tested other distributions, desktop environments, or Stream Deck models (Mini, XL, Pedal, and so on), and I have no idea how they will behave — including whether a model with more buttons has enough headroom for layered backgrounds. Do not assume you can run two GIFs plus a page background on every key without ever hitting limits.
 
-- Stream Deck Original (2)
-- Stream Deck Mini
-- Stream Deck XL
-- Stream Deck Pedal
-- Stream Deck Plus
-- Stream Deck Neo (only the normal buttons)
-- Stream Deck Modules
+## Not included / not planned
 
-## Features
-
-### Plugins
-
-StreamController features plugin support with a built-in store to download your favorite actions. You can also publish your own plugins. For more details, visit the [Wiki](https://streamcontroller.github.io/docs).
-
-### Wallpapers
-
-Customize your Stream Deck pages with cool wallpapers and videos to make them more engaging.
-
-### Screen Saver
-
-Set up a custom screen saver to display a picture or video when your Stream Deck is in idle.
-
-### Automatic Page Switching
-
-Available for GNOME, Hyprland, Sway, KDE (when kdotool is installed) and all X11 desktops, this feature allows you to automatically change your active page based on the active window. For example, you can switch to your favorite music albums when you open Spotify, your projects when you open VSCode, or your favorite websites in Firefox.
-
-## Auto-Lock
-
-Lock your Stream deck when your system is locked, preventing unwanted use from third parties (available on KDE and GNOME, and Cinnamon).
+- No packaging, binaries, or installers.
+- No CI guarantees and no release channel.
+- No plans to upstream these changes. My personal requirements are too specific to my setup to be worth a pull request
 
 ## Installation
 
-To install StreamController, click the button below or follow the [installation instructions](https://streamcontroller.github.io/docs/latest/installation/):
+There is no installer or release build. To run this:
 
-<a href='https://flathub.org/apps/details/com.core447.StreamController'><img width='200px' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
+1. Clone the repository and build it.
+2. Expect to patch things for your own distribution, desktop environment, and hardware. Paths, dependencies, and Stream Deck model handling have moved on upstream since this was forked, and this fork is not kept in sync.
 
-To install the head of main as a Flatpak just run the following command:
+## Why this exists
 
-```sh
-bash -c "$(wget -O - https://raw.githubusercontent.com/StreamController/StreamController/main/flatpak/install.sh)"
-```
+These are my daily-driver customizations for my own Stream Deck workflow — deployment status monitoring, layered backgrounds, and a few quality-of-life fixes — that are not necessarily a fit for upstream as they are. I keep them as a fork rather than a diff or patch file mostly because it makes tracking changes over time easier for me.
 
-#### Unofficial Packages
+## Upstream project
 
-The following packages are functional but unofficial and maintained by our community:
-
-[![Packaging status](https://repology.org/badge/vertical-allrepos/streamcontroller.svg)](https://repology.org/project/streamcontroller/versions)
-
-## Warning
-
-StreamController is currently in beta. While core features like actions and pages are stable, high memory usage can still be an issue. We are actively working to resolve this and bring the app to a stable release soon. Please report any issues you encounter.
-
-## Contributing
-
-We welcome contributions! Feel free to open pull requests to improve StreamController.
-
-If you're interested in helping with the development of this app, you can contact me on our [Discord server](https://discord.gg/MSyHM8TN3u) to request write access to our [Dev planning board](https://github.com/orgs/StreamController/projects/2). For more information see [Dev-Planning-Board](Dev-Planning-Board.md).
-
-### Contributors
-
-Thank you to all our contributors for your hard work and support!
-
-<a href="https://github.com/streamcontroller/streamcontroller/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=streamcontroller/streamcontroller"/>
-</a>
-
-## Links
-
-- [Website](https://core447.com)
-- [Wiki](https://streamcontroller.github.io/docs)
-- [Discord](https://discord.gg/MSyHM8TN3u)
-
-## Note
-
-This application is unofficial and not affiliated with Elgato.
+Please use and support the real thing: [StreamController/StreamController](https://github.com/StreamController/StreamController) — actively maintained, with far more features, broader hardware support, and an actual community behind it.

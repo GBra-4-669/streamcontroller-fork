@@ -80,15 +80,16 @@ class CustomAssetChooser(ChooserPage):
     
     def add_files(self, files: list) -> None:
         gl.asset_manager.set_cursor_from_name("wait")
-        for path in files:
+        def add_files_worker():
+            try:
+                for file in files:
+                    url = file.get_uri()
+                    path = file.get_path()
+                    gl.asset_manager_backend.add_custom_media_set_by_ui(url=url, path=path)
+            finally:
+                GLib.idle_add(gl.asset_manager.set_cursor_from_name, "default")
 
-            url = path.get_uri()
-            path = path.get_path()
-
-            # gl.asset_manager_backend.add_custom_media_set_by_ui(url=url, path=path)
-            threading.Thread(target=gl.asset_manager_backend.add_custom_media_set_by_ui, args=(url, path), name="add_custom_media_set_by_ui").start()
-
-        gl.asset_manager.set_cursor_from_name("default")
+        threading.Thread(target=add_files_worker, name="add_custom_media_set_by_ui").start()
 
     def show_for_path(self, path):
         if not self.build_finished:
