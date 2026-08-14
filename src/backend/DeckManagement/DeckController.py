@@ -368,6 +368,11 @@ class MediaPlayerThread(threading.Thread):
         if len(self.fps) > self.FPS *2:
             self.fps.pop(0)
 
+    def reset_fps_history(self) -> None:
+        self.fps.clear()
+        self.old_warning_state = False
+        self.set_banner_revealed(False)
+
     def get_median_fps(self) -> float:
         return statistics.median(self.fps)
     
@@ -1246,6 +1251,7 @@ class DeckController:
         log.info(f"Loaded page {page.get_name()} on deck {self.safe_serial_number()}")
         log.info(f"[page-switch] deck={self.safe_serial_number()} page={page.get_name()} total_ms={total_ms:.1f}")
         log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} page={page.get_name()} brightness_ms={brightness_ms:.1f} screensaver_ms={screensaver_ms:.1f} initialize_actions_ms={initialize_actions_ms:.1f}")
+        self.media_player.reset_fps_history()
         self.maybe_collect_garbage()
 
     # Minimum seconds between post-load garbage collections, so rapid page
