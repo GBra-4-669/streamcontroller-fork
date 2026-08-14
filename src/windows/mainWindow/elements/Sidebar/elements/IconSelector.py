@@ -31,9 +31,10 @@ from src.backend.DeckManagement.ImageHelpers import image2pixbuf
 import globals as gl
 
 class IconSelector(Gtk.Box):
-    def __init__(self, sidebar, **kwargs):
+    def __init__(self, sidebar, media_key="media", **kwargs):
         super().__init__(**kwargs)
         self.sidebar = sidebar
+        self.media_key = media_key
         self.active_identifier: InputIdentifier = None
         self.active_state: int = None
 
@@ -127,14 +128,14 @@ class IconSelector(Gtk.Box):
         
         active_state = self.sidebar.active_state
 
-        return page.get_media_path(identifier=self.active_identifier, state=active_state)
+        return page.get_media_value(self.active_identifier, active_state, self.media_key, "path")
     
     def set_media_path(self, path):
         page = gl.app.main_win.get_active_page()
         if page is None:
             return
 
-        page.set_media_path(identifier=self.active_identifier, state=self.active_state, path=path)
+        page.set_media_value(self.active_identifier, self.active_state, self.media_key, "path", path)
         page.save()
 
         # Update remove button visibility

@@ -241,6 +241,12 @@ class KeyEditor(Gtk.Box):
         self.image_editor = ImageEditor(sidebar, margin_top=90)
         self.main_box.append(self.image_editor)
 
+        self.second_icon_selector = IconSelector(sidebar, media_key="media-2", halign=Gtk.Align.CENTER, margin_top=30)
+        self.main_box.append(self.second_icon_selector)
+
+        self.second_image_editor = ImageEditor(sidebar, media_key="media-2", title="Second image layout", margin_top=25)
+        self.main_box.append(self.second_image_editor)
+
         self.background_editor = BackgroundEditor(sidebar, margin_top=25)
         self.main_box.append(self.background_editor)
 
@@ -306,6 +312,8 @@ class KeyEditor(Gtk.Box):
 
         self.icon_selector.load_for_identifier(identifier, state)
         self.image_editor.load_for_identifier(identifier, state)
+        self.second_icon_selector.load_for_identifier(identifier, state)
+        self.second_image_editor.load_for_identifier(identifier, state)
         self.label_editor.load_for_identifier(identifier, state)
         self.action_editor.load_for_identifier(identifier, state)
         self.background_editor.load_for_identifier(identifier, state)
