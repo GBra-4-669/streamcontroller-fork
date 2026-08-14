@@ -917,6 +917,23 @@ class Page:
         if update:
             self.update_input(identifier, state)
 
+    def get_media_value(self, identifier: InputIdentifier, state: int, media_key: str, property_name: str):
+        return self._get_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), media_key, property_name])
+
+    def set_media_value(self, identifier: InputIdentifier, state: int, media_key: str, property_name: str, value, update: bool = True) -> None:
+        for key_state in self.get_controller_input_states(identifier, state):
+            layout_manager = key_state.layout_manager if media_key == "media" else getattr(key_state, "media_2_layout_manager", None)
+            if layout_manager is not None:
+                setattr(layout_manager.page_layout, property_name.replace("-", "_"), value)
+            if property_name == "speed":
+                video = key_state.key_video if media_key == "media" else getattr(key_state, "media_2_video", None)
+                if video is not None and hasattr(video, "speed"):
+                    video.speed = value
+
+        self._set_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), media_key, property_name], value)
+        if update:
+            self.update_input(identifier, state)
+
     def get_media_size(self, identifier: InputIdentifier, state: int) -> float:
         return self._get_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "media", "size"])
 
@@ -1013,6 +1030,7 @@ class Page:
 
         self._set_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "background", "color"], color)
 
+    # Retained for touchscreen backgrounds and old page data. Key editing no longer exposes it.
     def get_background_image(self, identifier: InputIdentifier, state: int) -> str:
         return self._get_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "background", "image"])
 
@@ -1020,7 +1038,6 @@ class Page:
         self._set_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "background", "image"], path)
         if update:
             self.update_input(identifier, state)
-
 
 class NoActionHolderFound:
     def __init__(self, id: str, state: int, identifier: InputIdentifier = None):

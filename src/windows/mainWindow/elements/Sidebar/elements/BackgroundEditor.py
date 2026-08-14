@@ -77,8 +77,6 @@ class BackgroundExpanderRow(Adw.ExpanderRow):
         self.color_row = ColorRow(sidebar=self.label_group.sidebar, expander=self)
         self.add_row(self.color_row)
         
-        self.image_row = ImageRow(sidebar=self.label_group.sidebar, expander=self)
-        self.add_row(self.image_row)
 
     def load_for_identifier(self, identifier: InputIdentifier, state: int):
         self.active_identifier = identifier
@@ -86,11 +84,6 @@ class BackgroundExpanderRow(Adw.ExpanderRow):
 
         self.color_row.load_for_identifier(identifier, state)
         
-        # Only show image row for touchscreens
-        is_touchscreen = isinstance(identifier, Input.Touchscreen)
-        self.image_row.set_visible(is_touchscreen)
-        if is_touchscreen:
-            self.image_row.load_for_identifier(identifier, state)
 
 class ColorRow(Adw.PreferencesRow):
     def __init__(self, sidebar, expander: BackgroundExpanderRow, **kwargs):

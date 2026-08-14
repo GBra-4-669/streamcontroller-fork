@@ -116,6 +116,13 @@ class BackgroundMediaRow(Adw.PreferencesRow):
         self.fps_spinner = Gtk.SpinButton.new_with_range(1, 30, 1)
         self.fps_box.append(self.fps_spinner)
 
+        self.opacity_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, hexpand=True)
+        self.config_box.append(self.opacity_box)
+        self.opacity_label = Gtk.Label(label="Opacity (%)", hexpand=True, xalign=0)
+        self.opacity_box.append(self.opacity_label)
+        self.opacity_spinner = Gtk.SpinButton.new_with_range(0, 100, 1)
+        self.opacity_box.append(self.opacity_spinner)
+
         # Signals get directly disconnected by disconnect_signals() but we have to connect them beforehand to prevent errors
         self.connect_signals()
 
@@ -127,6 +134,7 @@ class BackgroundMediaRow(Adw.PreferencesRow):
         self.media_selector_button.connect("clicked", self.on_choose_image)
         self.loop_switch.connect("state-set", self.on_toggle_loop)
         self.fps_spinner.connect("value-changed", self.on_change_fps)
+        self.opacity_spinner.connect("value-changed", self.on_change_opacity)
         
 
     def disconnect_signals(self):
@@ -136,6 +144,7 @@ class BackgroundMediaRow(Adw.PreferencesRow):
             self.media_selector_button.disconnect_by_func(self.on_choose_image)
             self.loop_switch.disconnect_by_func(self.on_toggle_loop)
             self.fps_spinner.disconnect_by_func(self.on_change_fps)
+            self.opacity_spinner.disconnect_by_func(self.on_change_opacity)
         except TypeError as e:
             log.error(f"Don't panic, getting this error is normal: {e}")
 
@@ -154,11 +163,13 @@ class BackgroundMediaRow(Adw.PreferencesRow):
         file_path = page_dict.get("background", {}).get("path", None)
         loop = page_dict.get("background", {}).get("loop", True)
         fps = page_dict.get("background", {}).get("fps", 30)
+        opacity = page_dict.get("background", {}).get("opacity", 1.0)
 
         self.overwrite_switch.set_active(overwrite)
         self.show_switch.set_active(show)
         self.loop_switch.set_active(loop)
         self.fps_spinner.set_value(fps)
+        self.opacity_spinner.set_value(opacity * 100)
 
         # Set config box state
         self.config_box.set_visible(overwrite)
@@ -188,6 +199,15 @@ class BackgroundMediaRow(Adw.PreferencesRow):
     def on_change_fps(self, spinner):
         dict_data = self.page_editor.get_page_data()
         dict_data["background"]["fps"] = spinner.get_value_as_int()
+        self.page_editor.set_page_data(dict_data,
+                                        reload_brightness=False,
+                                        reload_screensaver=False,
+                                        reload_background=True,
+                                        reload_inputs=False)
+
+    def on_change_opacity(self, spinner):
+        dict_data = self.page_editor.get_page_data()
+        dict_data["background"]["opacity"] = spinner.get_value() / 100
         self.page_editor.set_page_data(dict_data,
                                         reload_brightness=False,
                                         reload_screensaver=False,

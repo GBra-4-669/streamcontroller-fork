@@ -438,6 +438,10 @@ class BackgroundGroup(PageEditorGroup):
         self.fps_spin.set_title("FPS")
         self.media_settings_box.append(self.fps_spin)
 
+        self.opacity_spin = Adw.SpinRow.new_with_range(0, 100, 1)
+        self.opacity_spin.set_title("Opacity (%)")
+        self.media_settings_box.append(self.opacity_spin)
+
         self.button_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER)
         self.media_main_box.append(self.button_box)
 
@@ -455,6 +459,7 @@ class BackgroundGroup(PageEditorGroup):
         self.show_background_toggle.connect("notify::active", self.on_show_background_changed)
         self.loop_toggle.connect("notify::active", self.on_loop_changed)
         self.fps_spin.connect("changed", self.on_fps_changed)
+        self.opacity_spin.connect("changed", self.on_opacity_changed)
         self.media_selector_button.connect("clicked", self.on_media_selector_click)
 
     def disconnect_events(self):
@@ -462,6 +467,7 @@ class BackgroundGroup(PageEditorGroup):
         better_disconnect(self.show_background_toggle, self.on_show_background_changed)
         better_disconnect(self.loop_toggle, self.on_loop_changed)
         better_disconnect(self.fps_spin, self.on_fps_changed)
+        better_disconnect(self.opacity_spin, self.on_opacity_changed)
         better_disconnect(self.media_selector_button, self.on_media_selector_click)
 
     def load_config_settings(self, page_path: str):
@@ -473,6 +479,7 @@ class BackgroundGroup(PageEditorGroup):
         self.show_background_toggle.set_active(background_settings.get("show", False))
         self.loop_toggle.set_active(background_settings.get("loop", False))
         self.fps_spin.set_value(background_settings.get("fps", 0))
+        self.opacity_spin.set_value(background_settings.get("opacity", 1.0) * 100)
         self.set_thumbnail(background_settings.get("media-path", None))
 
     def on_enable_changed(self, *args):
@@ -500,6 +507,13 @@ class BackgroundGroup(PageEditorGroup):
         gl.page_manager.overwrite_background_settings(
             path=self.page_editor.active_page_path,
             fps=int(self.fps_spin.get_value())
+        )
+        self.update_background()
+
+    def on_opacity_changed(self, *args):
+        gl.page_manager.overwrite_background_settings(
+            path=self.page_editor.active_page_path,
+            opacity=self.opacity_spin.get_value() / 100
         )
         self.update_background()
 

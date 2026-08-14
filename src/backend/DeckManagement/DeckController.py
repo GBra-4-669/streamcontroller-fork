@@ -350,7 +350,8 @@ class MediaPlayerThread(threading.Thread):
         needs = False
         for key in self.deck_controller.inputs.get(Input.Key, []):
             state = key.get_active_state()
-            if state.key_video is not None or state.label_manager.get_has_scroll_labels():
+            if (state.key_video is not None or state.media_2_video is not None
+                    or state.label_manager.get_has_scroll_labels()):
                 needs = True
                 break
         if not needs:
@@ -1049,6 +1050,7 @@ class DeckController:
             config.get("media-path"),
             bool(config.get("loop", False)),
             int(config.get("fps", 30)),
+            float(config.get("opacity", 1.0)),
         )
         if not force_reload and background_signature == self._last_background_signature:
             log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} phase=background skip=unchanged")
@@ -1060,6 +1062,7 @@ class DeckController:
             update=update,
             loop=config.get("loop", False),
             fps=config.get("fps", 30),
+            opacity=config.get("opacity", 1.0),
         )
         log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} phase=background ms={(time.time() - start) * 1000:.1f}")
 
@@ -1571,7 +1574,7 @@ class Background:
         if update:
             self.deck_controller.update_all_inputs()
 
-    def set_from_path(self, path: str, fps: int = 30, loop: bool = True, update: bool = True, allow_keep: bool = True) -> None:
+    def set_from_path(self, path: str, fps: int = 30, loop: bool = True, opacity: float = 1.0, update: bool = True, allow_keep: bool = True) -> None:
         if path == "":
             path = None
         if path is None:
@@ -1587,21 +1590,23 @@ class Background:
                     self.video.page = self.deck_controller.active_page
                     self.video.fps = fps
                     self.video.loop = loop
+                    self.video.opacity = max(0.0, min(1.0, opacity))
                     return
                 if self.video is None and self.standby_video is not None and self.standby_video.video_path == path:
                     self.standby_video.page = self.deck_controller.active_page
                     self.standby_video.fps = fps
                     self.standby_video.loop = loop
+                    self.standby_video.opacity = max(0.0, min(1.0, opacity))
                     self.set_video(self.standby_video, update=update)
                     return
-            self.set_video(BackgroundVideo(self.deck_controller, path, loop=loop, fps=fps), update=update)
+            self.set_video(BackgroundVideo(self.deck_controller, path, loop=loop, fps=fps, opacity=opacity), update=update)
         else:
             if path is None:
                 return
             if not os.path.isfile(path):
                 return
             with Image.open(path) as image:
-                self.set_image(BackgroundImage(self.deck_controller, image.copy()), update=update)
+                self.set_image(BackgroundImage(self.deck_controller, image.copy(), opacity=opacity), update=update)
 
     def update_tiles(self) -> None:
         old_tiles = self.tiles # Why store them and close them later? So that there is not key error if the media threads fetches them during the update
@@ -1620,9 +1625,10 @@ class Background:
         del old_tiles
 
 class BackgroundImage:
-    def __init__(self, deck_controller: DeckController, image: Image) -> None:
+    def __init__(self, deck_controller: DeckController, image: Image, opacity: float = 1.0) -> None:
         self.deck_controller = deck_controller
         self.image = image
+        self.opacity = max(0.0, min(1.0, opacity))
 
     def close(self) -> None:
         if self.image is not None:
@@ -1648,6 +1654,9 @@ class BackgroundImage:
 
         # Convert to RGBA first to preserve transparency, then resize
         img_rgba = self.image.convert("RGBA")
+        if self.opacity < 1.0:
+            alpha = img_rgba.getchannel("A")
+            img_rgba.putalpha(alpha.point([int(i * self.opacity) for i in range(256)]))
         return ImageOps.fit(img_rgba, full_deck_image_size, Image.LANCZOS)
     
     def crop_key_image_from_deck_sized_image(self, image: Image.Image, key):
@@ -1693,11 +1702,12 @@ class BackgroundImage:
         self.image = None
 
 class BackgroundVideo(BackgroundVideoCache):
-    def __init__(self, deck_controller: DeckController, video_path: str, loop: bool = True, fps: int = 30) -> None:
+    def __init__(self, deck_controller: DeckController, video_path: str, loop: bool = True, fps: int = 30, opacity: float = 1.0) -> None:
         self.deck_controller = deck_controller
         self.video_path = video_path
         self.loop = loop
         self.fps = fps
+        self.opacity = max(0.0, min(1.0, opacity))
 
         self.page: Page = self.deck_controller.active_page
 
@@ -1718,6 +1728,10 @@ class BackgroundVideo(BackgroundVideoCache):
             copied_tiles = [tile.copy() for tile in tiles]
         except:
             copied_tiles = [None for _ in range(len(tiles))]
+        if self.opacity < 1.0:
+            for tile in copied_tiles:
+                alpha = tile.getchannel("A")
+                tile.putalpha(alpha.point([int(i * self.opacity) for i in range(256)]))
         return copied_tiles
 
         frame = self.get_next_frame()
@@ -2222,6 +2236,12 @@ class LayoutManager:
         left_margin = int((background.width - image_resized.width) * (halign + 1) / 2)
         top_margin = int((background.height - image_resized.height) * (valign + 1) / 2)
 
+        if layout.opacity < 1.0:
+            if image_resized.mode != "RGBA":
+                image_resized = image_resized.convert("RGBA")
+            alpha = image_resized.getchannel("A")
+            image_resized.putalpha(alpha.point([int(i * layout.opacity) for i in range(256)]))
+
         # Create an image copy for the result
         final_image = background.copy()
 
@@ -2230,15 +2250,6 @@ class LayoutManager:
             final_image.paste(image_resized, (left_margin, top_margin), image_resized)
         else:
             final_image.paste(image_resized, (left_margin, top_margin))
-
-        # Apply opacity from layout
-        if layout.opacity < 1.0:
-            if final_image.mode != "RGBA":
-                final_image = final_image.convert("RGBA")
-            alpha = final_image.getchannel("A")
-            lut = [int(i * layout.opacity) for i in range(256)]
-            alpha = alpha.point(lut)
-            final_image.putalpha(alpha)
 
         return final_image
     
@@ -2809,41 +2820,45 @@ class ControllerKey(ControllerInput):
         return super().get_active_state()
 
     def on_media_player_tick(self) -> None:
-        self.media_ticks += 1
-        current_time = time.time()
+        with self._render_lock:
+            self.media_ticks += 1
+            current_time = time.time()
 
-        state = self.get_active_state()
-        needs_update = False
-        
-        # Check if we need to update based on content type
-        if state.key_video is not None:
-            if isinstance(state.key_video, KeyGIF):
-                # Use GIF frame delay timing
-                if self.last_gif_update_time == 0:
-                    self.last_gif_update_time = current_time
-                    needs_update = True
-                else:
-                    frame_delay = state.key_video.get_frame_delay()
-                    elapsed = current_time - self.last_gif_update_time
-                    if elapsed >= frame_delay:
-                        # Advance by frame_delay (not current_time) to maintain
-                        # fixed-step cadence. If we're multiple frames behind,
-                        # skip the intermediate frames so animation speed stays
-                        # accurate regardless of render jitter.
-                        frames_to_skip = int(elapsed / frame_delay) - 1
-                        self.last_gif_update_time += frame_delay * (frames_to_skip + 1)
-                        for _ in range(frames_to_skip):
-                            state.key_video.get_next_frame()
+            state = self.get_active_state()
+            needs_update = False
+
+            # Check if we need to update based on content type
+            videos = [video for video in (state.key_video, state.media_2_video) if video is not None]
+            if videos:
+                gif_videos = [video for video in videos if isinstance(video, KeyGIF)]
+                if gif_videos:
+                    # Use GIF frame delay timing
+                    if self.last_gif_update_time == 0:
+                        self.last_gif_update_time = current_time
                         needs_update = True
-            else:
-                # For non-GIF videos, use the original FPS-based logic
+                    else:
+                        frame_delay = min(video.get_frame_delay() for video in gif_videos)
+                        elapsed = current_time - self.last_gif_update_time
+                        if elapsed >= frame_delay:
+                            # Advance by frame_delay (not current_time) to maintain
+                            # fixed-step cadence. If we're multiple frames behind,
+                            # skip the intermediate frames so animation speed stays
+                            # accurate regardless of render jitter.
+                            frames_to_skip = int(elapsed / frame_delay) - 1
+                            self.last_gif_update_time += frame_delay * (frames_to_skip + 1)
+                            for video in gif_videos:
+                                for _ in range(frames_to_skip):
+                                    video.get_next_frame()
+                            needs_update = True
+                else:
+                    # For non-GIF videos, use the original FPS-based logic
+                    needs_update = True
+            elif self.deck_controller.background.video is not None or state.label_manager.get_has_scroll_labels():
+                # Other content types
                 needs_update = True
-        elif self.deck_controller.background.video is not None or state.label_manager.get_has_scroll_labels():
-            # Other content types
-            needs_update = True
 
-        if needs_update:
-            self.update(priority=TASK_PRIORITY_LOW)
+            if needs_update:
+                self.update(priority=TASK_PRIORITY_LOW)
 
     def event_callback(self, press_state):
         screensaver_was_showing = self.deck_controller.screen_saver.showing
@@ -2919,21 +2934,18 @@ class ControllerKey(ControllerInput):
         if self.is_pressed() and not gl.settings_manager.get_app_settings().get("general", {}).get("shrink-background-on-press", True):
             compose_base = Image.new("RGBA", background.size, (0, 0, 0, 0))
 
-        key_image: Image.Image = None
-        # rotation = self.deck_controller.get_deck_settings().get("rotation", {}).get("value", 0)
-        if state.key_image is not None:
-            image = state.key_image.get_raw_image()
-            key_image = state.layout_manager.add_image_to_background(
-                image=image,
-                background=compose_base
-            )
-        elif state.key_video is not None:
-            image = state.key_video.get_raw_image()
-            key_image = state.layout_manager.add_image_to_background(
-                image=image,
-                background=compose_base)
-        else:
-            key_image = compose_base
+        key_image: Image.Image = compose_base
+        for image, layout_manager in (
+            (state.key_image.get_raw_image() if state.key_image is not None else
+             state.key_video.get_raw_image() if state.key_video is not None else None, state.layout_manager),
+            (state.media_2_image.get_raw_image() if state.media_2_image is not None else
+             state.media_2_video.get_raw_image() if state.media_2_video is not None else None, state.media_2_layout_manager),
+        ):
+            if image is not None:
+                composed = layout_manager.add_image_to_background(image=image, background=key_image)
+                if key_image is not compose_base:
+                    key_image.close()
+                key_image = composed
 
         labeled_image = state.label_manager.add_labels_to_image(key_image)
 
@@ -3051,8 +3063,7 @@ class ControllerKey(ControllerInput):
 
             ## Load media - why here? so that it doesn't overwrite the images chosen by the actions
             if load_media:
-                state.key_image = None
-                state.key_video = None
+                state.close_resources()
             
             if load_labels:
                 state.label_manager.clear_labels()
@@ -3089,46 +3100,30 @@ class ControllerKey(ControllerInput):
 
             ## Load media
             if load_media:
-                path = state_dict.get("media", {}).get("path", None)
-                if path not in ["", None]:
-                    if is_image(path):
-                        state.set_image(InputImage(
-                            controller_input=self,
-                            image=get_page_media_image(path, is_svg_media=False)
-                        ), update=False)
-
-                    elif is_svg(path):
-                        state.set_image(InputImage(
-                            controller_input=self,
-                            image=get_page_media_image(path, is_svg_media=True)
-                        ), update=False)
-
-                    elif is_video(path):
-                        if os.path.splitext(path)[1].lower() == ".gif":
-                            state.set_video(KeyGIF(
-                                controller_key=self,
-                                gif_path=path,
-                                loop=state_dict.get("media", {}).get("loop", True),
-                                fps=state_dict.get("media", {}).get("fps", 30),
-                                speed=state_dict.get("media", {}).get("speed", 1.0)
-                            )) # GIFs always update
-                        else:
-                            state.set_video(InputVideo(
-                                controller_input=self,
-                                video_path=path,
-                                loop = state_dict.get("media", {}).get("loop", True),
-                                fps = state_dict.get("media", {}).get("fps", 30),
-                            )) # Videos always update
-
-                layout = ImageLayout(
-                    fill_mode=state_dict.get("media", {}).get("fill-mode"),
-                    size=state_dict.get("media", {}).get("size"),
-                    valign=state_dict.get("media", {}).get("valign"),
-                    halign=state_dict.get("media", {}).get("halign"),
-                    opacity=state_dict.get("media", {}).get("opacity"),
-                    speed=state_dict.get("media", {}).get("speed"),
-                )
-                state.layout_manager.set_page_layout(layout, update=False)
+                for media_key, set_image, set_video, layout_manager in (
+                    ("media", state.set_image, state.set_video, state.layout_manager),
+                    ("media-2", state.set_media_2_image, state.set_media_2_video, state.media_2_layout_manager),
+                ):
+                    media = state_dict.get(media_key, {})
+                    path = media.get("path")
+                    if path not in ["", None]:
+                        if is_image(path):
+                            set_image(InputImage(controller_input=self, image=get_page_media_image(path, is_svg_media=False)), update=False)
+                        elif is_svg(path):
+                            set_image(InputImage(controller_input=self, image=get_page_media_image(path, is_svg_media=True)), update=False)
+                        elif is_video(path):
+                            video_class = KeyGIF if os.path.splitext(path)[1].lower() == ".gif" else InputVideo
+                            if video_class is KeyGIF:
+                                set_video(KeyGIF(controller_key=self, gif_path=path, loop=media.get("loop", True),
+                                                 fps=media.get("fps", 30), speed=media.get("speed", 1.0)))
+                            else:
+                                set_video(InputVideo(controller_input=self, video_path=path, loop=media.get("loop", True),
+                                                     fps=media.get("fps", 30)))
+                    layout_manager.set_page_layout(ImageLayout(
+                        fill_mode=media.get("fill-mode"), size=media.get("size"),
+                        valign=media.get("valign"), halign=media.get("halign"),
+                        opacity=media.get("opacity"), speed=media.get("speed"),
+                    ), update=False)
 
             elif len(state.get_own_actions()) > 1 and False: # Disabled for now - we might reuse it later
                 if state_dict.get("image-control-action") is None:
@@ -3811,18 +3806,28 @@ class ControllerKeyState(ControllerInputState):
 
         self.key_image: InputImage = None
         self.key_video: InputVideo = None
+        self.media_2_image: InputImage = None
+        self.media_2_video: InputVideo = None
+        self.media_2_layout_manager = LayoutManager(controller_key)
 
     def close_resources(self) -> None:
-        if self.key_image is not None:
-            self.key_image.close()
-            self.key_image = None
-        if self.key_video is not None:
-            self.key_video.close()
-            self.key_video = None
-            
-        # Reset GIF timing
-        if isinstance(self.controller_input, ControllerKey):
-            self.controller_input.last_gif_update_time = 0
+        with self.controller_input._render_lock:
+            if self.key_image is not None:
+                self.key_image.close()
+                self.key_image = None
+            if self.key_video is not None:
+                self.key_video.close()
+                self.key_video = None
+            if self.media_2_image is not None:
+                self.media_2_image.close()
+                self.media_2_image = None
+            if self.media_2_video is not None:
+                self.media_2_video.close()
+                self.media_2_video = None
+
+            # Reset GIF timing
+            if isinstance(self.controller_input, ControllerKey):
+                self.controller_input.last_gif_update_time = 0
     
     def set_image(self, key_image: "InputImage", update: bool = True) -> None:
         if self.key_image is not None:
@@ -3848,13 +3853,40 @@ class ControllerKeyState(ControllerInputState):
         if isinstance(self.controller_input, ControllerKey):
             self.controller_input.last_gif_update_time = 0
 
+    def set_media_2_image(self, image: "InputImage", update: bool = True) -> None:
+        if self.media_2_image is not None:
+            self.media_2_image.close()
+        if self.media_2_video is not None:
+            self.media_2_video.close()
+        self.media_2_image = image
+        self.media_2_video = None
+        if update:
+            self.update()
+
+    def set_media_2_video(self, video: "InputVideo", update: bool = True) -> None:
+        if self.media_2_video is not None:
+            self.media_2_video.close()
+        if self.media_2_image is not None:
+            self.media_2_image.close()
+        self.media_2_video = video
+        self.media_2_image = None
+        if update:
+            self.update()
+
     def clear(self):
         if self.key_image is not None:
             self.key_image.close()
         if self.key_video is not None:
             self.key_video.close()
+        if self.media_2_image is not None:
+            self.media_2_image.close()
+        if self.media_2_video is not None:
+            self.media_2_video.close()
         self.key_image = None
         self.key_video = None
+        self.media_2_image = None
+        self.media_2_video = None
+        self.media_2_layout_manager.clear()
         self.label_manager.clear_labels()
         self.layout_manager.clear()
         self.background_manager.set_page_color(None)

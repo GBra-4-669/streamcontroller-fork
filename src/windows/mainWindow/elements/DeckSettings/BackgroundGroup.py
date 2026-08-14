@@ -105,6 +105,13 @@ class BackgroundMediaRow(Adw.PreferencesRow):
         self.fps_spinner = Gtk.SpinButton.new_with_range(1, 30, 1)
         self.fps_box.append(self.fps_spinner)
 
+        self.opacity_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, hexpand=True)
+        self.config_box.append(self.opacity_box)
+        self.opacity_label = Gtk.Label(label="Opacity (%)", hexpand=True, xalign=0)
+        self.opacity_box.append(self.opacity_label)
+        self.opacity_spinner = Gtk.SpinButton.new_with_range(0, 100, 1)
+        self.opacity_box.append(self.opacity_spinner)
+
         self.connect_signals()
         self.load_defaults()
 
@@ -113,6 +120,7 @@ class BackgroundMediaRow(Adw.PreferencesRow):
         self.media_selector_button.connect("clicked", self.on_choose_image)
         self.loop_switch.connect("state-set", self.on_toggle_loop)
         self.fps_spinner.connect("value-changed", self.on_change_fps)
+        self.opacity_spinner.connect("value-changed", self.on_change_opacity)
         
 
     def disconnect_signals(self):
@@ -120,6 +128,7 @@ class BackgroundMediaRow(Adw.PreferencesRow):
         self.media_selector_button.disconnect_by_func(self.on_choose_image)
         self.loop_switch.disconnect_by_func(self.on_toggle_loop)
         self.fps_spinner.disconnect_by_func(self.on_change_fps)
+        self.opacity_spinner.disconnect_by_func(self.on_change_opacity)
 
 
     def load_defaults(self):
@@ -136,6 +145,7 @@ class BackgroundMediaRow(Adw.PreferencesRow):
         enable = original_values["background"].setdefault("enable", False)
         loop = original_values["background"].setdefault("loop", True)
         fps = original_values["background"].setdefault("fps", 30)
+        opacity = original_values["background"].setdefault("opacity", 1.0)
 
         # Save if changed
         if original_values != gl.settings_manager.get_deck_settings(self.deck_serial_number):
@@ -146,6 +156,7 @@ class BackgroundMediaRow(Adw.PreferencesRow):
         self.config_box.set_visible(enable)
         self.loop_switch.set_active(loop)
         self.fps_spinner.set_value(fps)
+        self.opacity_spinner.set_value(opacity * 100)
         self.set_thumbnail(path)
 
         self.connect_signals()
@@ -205,6 +216,12 @@ class BackgroundMediaRow(Adw.PreferencesRow):
         gl.settings_manager.save_deck_settings(self.deck_serial_number, settings)
 
         # Update
+        self.settings_page.deck_controller.load_background(page=self.settings_page.deck_controller.active_page)
+
+    def on_change_opacity(self, spinner):
+        settings = gl.settings_manager.get_deck_settings(self.deck_serial_number)
+        settings["background"]["opacity"] = spinner.get_value() / 100
+        gl.settings_manager.save_deck_settings(self.deck_serial_number, settings)
         self.settings_page.deck_controller.load_background(page=self.settings_page.deck_controller.active_page)
 
     def on_choose_image(self, button):

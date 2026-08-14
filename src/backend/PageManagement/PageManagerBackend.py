@@ -642,7 +642,7 @@ class PageManagerBackend:
         page_settings = self.get_page_settings(path)
         return page_settings.get("background", {})
 
-    def set_background_settings(self, path: str, overwrite: bool = False, show: bool = False, fps: int = 30, loop: bool = False, media_path: str = ""):
+    def set_background_settings(self, path: str, overwrite: bool = False, show: bool = False, fps: int = 30, loop: bool = False, media_path: str = "", opacity: float = 1.0):
         settings = self.get_page_settings(path)
 
         settings["background"] = {
@@ -650,12 +650,13 @@ class PageManagerBackend:
             "show": show,
             "fps": fps,
             "loop": loop,
-            "media-path": media_path
+            "media-path": media_path,
+            "opacity": opacity
         }
 
         self.set_page_settings(path, settings)
 
-    def overwrite_background_settings(self, path: str, overwrite: bool = None, show: bool = None, fps: int = None, loop: bool = None, media_path: str = None):
+    def overwrite_background_settings(self, path: str, overwrite: bool = None, show: bool = None, fps: int = None, loop: bool = None, media_path: str = None, opacity: float = None):
         settings = self.get_page_settings(path)
         background_settings = settings.get("background", {})
 
@@ -669,6 +670,8 @@ class PageManagerBackend:
             background_settings["loop"] = loop
         if media_path is not None:
             background_settings["media-path"] = media_path
+        if opacity is not None:
+            background_settings["opacity"] = opacity
 
         settings["background"] = background_settings
         self.set_page_settings(path, settings)

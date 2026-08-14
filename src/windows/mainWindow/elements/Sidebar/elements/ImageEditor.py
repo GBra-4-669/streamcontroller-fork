@@ -36,8 +36,10 @@ from GtkHelper.GtkHelper import RevertButton
 
 
 class ImageEditor(Gtk.Box):
-    def __init__(self, sidebar, **kwargs):
+    def __init__(self, sidebar, media_key="media", title=None, **kwargs):
         self.sidebar = sidebar
+        self.media_key = media_key
+        self.title = title
         super().__init__(**kwargs)
         self.build()
 
@@ -48,7 +50,7 @@ class ImageEditor(Gtk.Box):
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
         self.clamp.set_child(self.main_box)
 
-        self.image_group = ImageGroup(self.sidebar)
+        self.image_group = ImageGroup(self.sidebar, self.media_key, self.title)
         self.main_box.append(self.image_group)
 
     def load_for_identifier(self, identifier: InputIdentifier, state: int):
@@ -56,14 +58,16 @@ class ImageEditor(Gtk.Box):
 
 
 class ImageGroup(Adw.PreferencesGroup):
-    def __init__(self, sidebar, **kwargs):
+    def __init__(self, sidebar, media_key="media", title=None, **kwargs):
         super().__init__(**kwargs)
         self.sidebar = sidebar
+        self.media_key = media_key
+        self.title = title
 
         self.build()
 
     def build(self):
-        self.expander = Layout(self)
+        self.expander = Layout(self, self.media_key, self.title)
         self.add(self.expander)
 
         return
@@ -73,27 +77,28 @@ class ImageGroup(Adw.PreferencesGroup):
 
 
 class Layout(Adw.ExpanderRow):
-    def __init__(self, margin_group):
-        super().__init__(title=gl.lm.get("right-area.image-editor.layout.header"), subtitle=gl.lm.get("right-area.image-editor.layout.subtitle"))
+    def __init__(self, margin_group, media_key, title):
+        super().__init__(title=title or gl.lm.get("right-area.image-editor.layout.header"), subtitle=gl.lm.get("right-area.image-editor.layout.subtitle"))
         self.margin_group = margin_group
+        self.media_key = media_key
         self.identifier: InputIdentifier = None
         self.active_state: int = None
         self.build()
 
     def build(self):
-        self.size_row = SizeRow(sidebar=self.margin_group.sidebar)
+        self.size_row = SizeRow(sidebar=self.margin_group.sidebar, media_key=self.media_key)
         self.add_row(self.size_row)
 
-        self.valign_row = ValignRow(sidebar=self.margin_group.sidebar)
+        self.valign_row = ValignRow(sidebar=self.margin_group.sidebar, media_key=self.media_key)
         self.add_row(self.valign_row)
 
-        self.halign_row = HalignRow(sidebar=self.margin_group.sidebar)
+        self.halign_row = HalignRow(sidebar=self.margin_group.sidebar, media_key=self.media_key)
         self.add_row(self.halign_row)
 
-        self.opacity_row = OpacityRow(sidebar=self.margin_group.sidebar)
+        self.opacity_row = OpacityRow(sidebar=self.margin_group.sidebar, media_key=self.media_key)
         self.add_row(self.opacity_row)
 
-        self.speed_row = SpeedRow(sidebar=self.margin_group.sidebar)
+        self.speed_row = SpeedRow(sidebar=self.margin_group.sidebar, media_key=self.media_key)
         self.add_row(self.speed_row)
 
     def load_for_identifier(self, identifier: InputIdentifier, state: int):
@@ -108,9 +113,10 @@ class Layout(Adw.ExpanderRow):
 
 
 class SizeRow(Adw.PreferencesRow):
-    def __init__(self, sidebar, **kwargs):
+    def __init__(self, sidebar, media_key="media", **kwargs):
         super().__init__(**kwargs)
         self.sidebar = sidebar
+        self.media_key = media_key
         self.active_identifier: InputIdentifier = None
         self.build()
 
@@ -139,7 +145,8 @@ class SizeRow(Adw.PreferencesRow):
             return
 
         controller_input = controller.get_input(identifier)
-        use_page_properties = controller_input.get_active_state().layout_manager.get_use_page_layout_properties()
+        layout_manager = controller_input.get_active_state().layout_manager if self.media_key == "media" else controller_input.get_active_state().media_2_layout_manager
+        use_page_properties = layout_manager.get_use_page_layout_properties()
         self.size_spinner.revert_button.set_sensitive(use_page_properties.get("size", False))
 
         self.update_values()
@@ -156,7 +163,8 @@ class SizeRow(Adw.PreferencesRow):
             if controller is None:
                 return
             controller_input = controller.get_input(self.active_identifier)
-            composed_label = controller_input.get_active_state().layout_manager.get_composed_layout()
+            layout_manager = controller_input.get_active_state().layout_manager if self.media_key == "media" else controller_input.get_active_state().media_2_layout_manager
+            composed_label = layout_manager.get_composed_layout()
 
         self.size_spinner.button.set_value(composed_label.size*100)
 
@@ -164,13 +172,13 @@ class SizeRow(Adw.PreferencesRow):
 
     def on_size_changed(self, widget):
         active_page = gl.app.main_win.get_active_page()
-        active_page.set_media_size(identifier=self.active_identifier, state=self.active_state, size=widget.get_value()/100)
+        active_page.set_media_value(self.active_identifier, self.active_state, self.media_key, "size", widget.get_value()/100)
 
         self.size_spinner.revert_button.set_sensitive(True)
 
     def on_size_reset(self, widget):
         active_page = gl.app.main_win.get_active_page()
-        active_page.set_media_size(identifier=self.active_identifier, state=self.active_state, size=None)
+        active_page.set_media_value(self.active_identifier, self.active_state, self.media_key, "size", None)
 
         self.size_spinner.revert_button.set_sensitive(False)
         self.update_values()
@@ -186,10 +194,11 @@ class SizeRow(Adw.PreferencesRow):
 
 
 class AlignmentRow(Adw.PreferencesRow):
-    def __init__(self, sidebar, label_text, property_name, **kwargs):
+    def __init__(self, sidebar, label_text, property_name, media_key="media", **kwargs):
         super().__init__(**kwargs)
         self.sidebar = sidebar
         self.property_name = property_name
+        self.media_key = media_key
         self.active_identifier: InputIdentifier = None
         self.active_state: int = None
         self.build(label_text)
@@ -217,7 +226,8 @@ class AlignmentRow(Adw.PreferencesRow):
         controller = gl.app.main_win.get_active_controller()
 
         controller_input = controller.get_input(identifier)
-        use_page_properties = controller_input.get_active_state().layout_manager.get_use_page_layout_properties()
+        layout_manager = controller_input.get_active_state().layout_manager if self.media_key == "media" else controller_input.get_active_state().media_2_layout_manager
+        use_page_properties = layout_manager.get_use_page_layout_properties()
         self.alignment_spinner.revert_button.set_sensitive(use_page_properties.get(self.property_name, False))
 
         self.connect_signals()
@@ -230,7 +240,8 @@ class AlignmentRow(Adw.PreferencesRow):
             if controller is None:
                 return
             controller_input = controller.get_input(self.active_identifier)
-            composed_label = controller_input.get_active_state().layout_manager.get_composed_layout()
+            layout_manager = controller_input.get_active_state().layout_manager if self.media_key == "media" else controller_input.get_active_state().media_2_layout_manager
+            composed_label = layout_manager.get_composed_layout()
 
         self.alignment_spinner.button.set_value(getattr(composed_label, self.property_name))
 
@@ -239,16 +250,14 @@ class AlignmentRow(Adw.PreferencesRow):
     def on_alignment_changed(self, widget):
         active_page = gl.app.main_win.get_active_page()
 
-        page_method = getattr(active_page, f"set_media_{self.property_name}")
-        page_method(self.active_identifier, self.active_state, widget.get_value())
+        active_page.set_media_value(self.active_identifier, self.active_state, self.media_key, self.property_name, widget.get_value())
 
         self.alignment_spinner.revert_button.set_sensitive(True)
 
     def on_alignment_reset(self, widget):
         active_page = gl.app.main_win.get_active_page()
 
-        page_method = getattr(active_page, f"set_media_{self.property_name}")
-        page_method(self.active_identifier, self.active_state, None)
+        active_page.set_media_value(self.active_identifier, self.active_state, self.media_key, self.property_name, None)
 
         self.alignment_spinner.revert_button.set_sensitive(False)
         self.update_values()
@@ -260,18 +269,19 @@ class AlignmentRow(Adw.PreferencesRow):
         self.alignment_spinner.button.disconnect_by_func(self.on_alignment_changed)
 
 class ValignRow(AlignmentRow):
-    def __init__(self, sidebar, **kwargs):
-        super().__init__(sidebar, label_text=gl.lm.get("right-area.image-editor.layout.valign.label"), property_name="valign", **kwargs)
+    def __init__(self, sidebar, media_key="media", **kwargs):
+        super().__init__(sidebar, label_text=gl.lm.get("right-area.image-editor.layout.valign.label"), property_name="valign", media_key=media_key, **kwargs)
 
 class HalignRow(AlignmentRow):
-    def __init__(self, sidebar, **kwargs):
-        super().__init__(sidebar, label_text=gl.lm.get("right-area.image-editor.layout.halign.label"), property_name="halign", **kwargs)
+    def __init__(self, sidebar, media_key="media", **kwargs):
+        super().__init__(sidebar, label_text=gl.lm.get("right-area.image-editor.layout.halign.label"), property_name="halign", media_key=media_key, **kwargs)
 
 
 class OpacityRow(Adw.PreferencesRow):
-    def __init__(self, sidebar, **kwargs):
+    def __init__(self, sidebar, media_key="media", **kwargs):
         super().__init__(**kwargs)
         self.sidebar = sidebar
+        self.media_key = media_key
         self.active_identifier: InputIdentifier = None
         self.active_state: int = None
         self.build()
@@ -300,7 +310,8 @@ class OpacityRow(Adw.PreferencesRow):
             return
 
         controller_input = controller.get_input(identifier)
-        use_page = controller_input.get_active_state().layout_manager.get_use_page_layout_properties()
+        layout_manager = controller_input.get_active_state().layout_manager if self.media_key == "media" else controller_input.get_active_state().media_2_layout_manager
+        use_page = layout_manager.get_use_page_layout_properties()
         self.opacity_spinner.revert_button.set_sensitive(use_page.get("opacity", False))
 
         self.update_values()
@@ -312,18 +323,19 @@ class OpacityRow(Adw.PreferencesRow):
         if controller is None:
             return
         controller_input = controller.get_input(self.active_identifier)
-        layout = controller_input.get_active_state().layout_manager.get_composed_layout()
+        layout_manager = controller_input.get_active_state().layout_manager if self.media_key == "media" else controller_input.get_active_state().media_2_layout_manager
+        layout = layout_manager.get_composed_layout()
         self.opacity_spinner.button.set_value(int(layout.opacity * 100))
         self.connect_signals()
 
     def on_changed(self, widget):
         active_page = gl.app.main_win.get_active_page()
-        active_page.set_media_opacity(identifier=self.active_identifier, state=self.active_state, opacity=widget.get_value() / 100)
+        active_page.set_media_value(self.active_identifier, self.active_state, self.media_key, "opacity", widget.get_value() / 100)
         self.opacity_spinner.revert_button.set_sensitive(True)
 
     def on_reset(self, widget):
         active_page = gl.app.main_win.get_active_page()
-        active_page.set_media_opacity(identifier=self.active_identifier, state=self.active_state, opacity=None)
+        active_page.set_media_value(self.active_identifier, self.active_state, self.media_key, "opacity", None)
         self.opacity_spinner.revert_button.set_sensitive(False)
         self.update_values()
 
@@ -338,9 +350,10 @@ class OpacityRow(Adw.PreferencesRow):
 
 
 class SpeedRow(Adw.PreferencesRow):
-    def __init__(self, sidebar, **kwargs):
+    def __init__(self, sidebar, media_key="media", **kwargs):
         super().__init__(**kwargs)
         self.sidebar = sidebar
+        self.media_key = media_key
         self.active_identifier: InputIdentifier = None
         self.active_state: int = None
         self.build()
@@ -369,7 +382,8 @@ class SpeedRow(Adw.PreferencesRow):
             return
 
         controller_input = controller.get_input(identifier)
-        use_page = controller_input.get_active_state().layout_manager.get_use_page_layout_properties()
+        layout_manager = controller_input.get_active_state().layout_manager if self.media_key == "media" else controller_input.get_active_state().media_2_layout_manager
+        use_page = layout_manager.get_use_page_layout_properties()
         self.speed_spinner.revert_button.set_sensitive(use_page.get("speed", False))
 
         self.update_values()
@@ -381,18 +395,19 @@ class SpeedRow(Adw.PreferencesRow):
         if controller is None:
             return
         controller_input = controller.get_input(self.active_identifier)
-        layout = controller_input.get_active_state().layout_manager.get_composed_layout()
+        layout_manager = controller_input.get_active_state().layout_manager if self.media_key == "media" else controller_input.get_active_state().media_2_layout_manager
+        layout = layout_manager.get_composed_layout()
         self.speed_spinner.button.set_value(int(layout.speed * 100))
         self.connect_signals()
 
     def on_changed(self, widget):
         active_page = gl.app.main_win.get_active_page()
-        active_page.set_media_speed(identifier=self.active_identifier, state=self.active_state, speed=widget.get_value() / 100)
+        active_page.set_media_value(self.active_identifier, self.active_state, self.media_key, "speed", widget.get_value() / 100)
         self.speed_spinner.revert_button.set_sensitive(True)
 
     def on_reset(self, widget):
         active_page = gl.app.main_win.get_active_page()
-        active_page.set_media_speed(identifier=self.active_identifier, state=self.active_state, speed=None)
+        active_page.set_media_value(self.active_identifier, self.active_state, self.media_key, "speed", None)
         self.speed_spinner.revert_button.set_sensitive(False)
         self.update_values()
 
