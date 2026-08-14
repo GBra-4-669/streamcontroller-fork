@@ -4,6 +4,8 @@ A personal fork of [StreamController](https://github.com/StreamController/Stream
 
 ![StreamDeckGB on the "beatiful" page](docs/streamdeckgb-beatiful.gif)
 
+For higher-quality demonstrations, [watch the original videos on the deployed demo page](https://gbra-4-669.github.io/streamcontroller-fork/).
+
 > **This is a private, unmaintained fork.** The repository is public only so I can use GitHub's tooling (Pages, Actions, and releases) for my own testing. Treat it as a snapshot of my working tree, not as software meant for general use.
 
 - **No prebuilt binaries.** There is no installer and no release build.
