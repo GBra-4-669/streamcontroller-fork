@@ -49,7 +49,10 @@ class PageManagerBackend:
 
         self.page_order = []
 
-        self.max_pages = 3
+        cached_pages = self.settings_manager.load_settings_from_file(
+            os.path.join(gl.DATA_PATH, "settings", "settings.json")
+        ).get("performance", {}).get("n-cached-pages", 3)
+        self.max_pages = max(1, int(cached_pages) + 1)
         self.page_number = 0
 
         self.MAX_BACKUPS = 5

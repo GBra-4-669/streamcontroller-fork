@@ -2,6 +2,8 @@
 
 A personal fork of [StreamController](https://github.com/StreamController/StreamController) with a handful of quality-of-life changes I use on my own Stream Deck.
 
+![StreamDeckGB on the "beatiful" page](docs/streamdeckgb-beatiful.gif)
+
 > **This is a private, unmaintained fork.** The repository is public only so I can use GitHub's tooling (Pages, Actions, and releases) for my own testing. Treat it as a snapshot of my working tree, not as software meant for general use.
 
 - **No prebuilt binaries.** There is no installer and no release build.
@@ -12,12 +14,12 @@ All credit for the core application goes to the [StreamController](https://githu
 
 ## What's different from upstream
 
-- **Background opacity** — opacity control for all backgrounds (page and key backgrounds), not just foreground images.
-- **Layered images per key** — each key can hold two images, each with its own opacity, composited over the page background. For example: page background + one GIF + one icon per key.
-- **Smart Command** — a new stateful action type. See the source for current behavior; it is actively evolving as I use it and has no stable spec.
-- **Watch GitHub Deployments** — a new action/plugin that polls a repository's GitHub deployment status and reflects it on a key.
-- **Static WebP support** — support for static `.webp` images as key and background assets.
-- **GIF speed fix** — corrected a logic error in animated GIF playback that made GIFs play at the wrong speed relative to their frame delays.
+- **Background opacity**: opacity control for all backgrounds (page and key backgrounds), not just foreground images.
+- **Layered images per key**: each key can hold two images, each with its own opacity, composited over the page background. For example: page background + one GIF + one icon per key.
+- **Smart Command**: a new stateful action type. See the source for current behavior; it is actively evolving as I use it and has no stable spec.
+- **Watch GitHub Deployments**: displays a repo's deployment status on a key. Press to refresh manually, or enable automatic updates via a local `pre-push` hook.
+- **Static WebP support**: support for static `.webp` images as key and background assets.
+- **GIF speed fix**: corrected a logic error in animated GIF playback that made GIFs play at the wrong speed relative to their frame delays.
 
 ## Tested on
 
