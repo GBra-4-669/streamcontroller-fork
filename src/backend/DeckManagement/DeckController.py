@@ -36,6 +36,7 @@ from loguru import logger as log
 from StreamDeck.Devices.RotatedDeck import RotatedDeck
 from src.backend.DeckManagement.HelperMethods import *
 from src.backend.DeckManagement.ImageHelpers import *
+from src.backend.DeckManagement import blend_modes
 from src.backend.DeckManagement.InputIdentifier import Input, InputEvent, InputIdentifier
 from src.backend.DeckManagement.Subclasses.ActionPermissionManager import ActionPermissionManager
 from src.backend.DeckManagement.Subclasses.FakeDeck import FakeDeck
@@ -2145,7 +2146,8 @@ class LayoutManager:
             "fill-mode": self.page_layout.fill_mode is not None,
             "size": self.page_layout.size is not None,
             "opacity": self.page_layout.opacity is not None,
-            "speed": self.page_layout.speed is not None
+            "speed": self.page_layout.speed is not None,
+            "blend-mode": self.page_layout.blend_mode is not None
         }
     
     def get_composed_layout(self) -> ImageLayout:
@@ -2167,6 +2169,8 @@ class LayoutManager:
             layout.opacity = page_layout.opacity
         if use_page_layout_properties["speed"]:
             layout.speed = page_layout.speed
+        if use_page_layout_properties["blend-mode"]:
+            layout.blend_mode = page_layout.blend_mode
 
         return self.inject_defaults(layout)
     
@@ -2186,6 +2190,8 @@ class LayoutManager:
             layout.opacity = 1.0
         if layout.speed is None:
             layout.speed = 1.0
+        if layout.blend_mode is None:
+            layout.blend_mode = "normal"
 
         return layout
     
@@ -2251,11 +2257,27 @@ class LayoutManager:
         # Create an image copy for the result
         final_image = background.copy()
 
-        # Paste the resized foreground onto the composite image at the calculated position
-        if image_resized.has_transparency_data:
-            final_image.paste(image_resized, (left_margin, top_margin), image_resized)
+        if image_resized.mode != "RGBA":
+            image_resized = image_resized.convert("RGBA")
+
+        if layout.blend_mode != "normal":
+            # Blend only within the source footprint. Crop the backdrop region,
+            # blend source over it, then write the result back.
+            box = (
+                left_margin,
+                top_margin,
+                left_margin + image_resized.width,
+                top_margin + image_resized.height,
+            )
+            backdrop_region = final_image.crop(box)
+            blended = blend_modes.blend(backdrop_region, image_resized, layout.blend_mode)
+            final_image.paste(blended, (left_margin, top_margin))
         else:
-            final_image.paste(image_resized, (left_margin, top_margin))
+            # Correct source-over compositing. paste(..., mask=image) does a plain
+            # mask-weighted lerp of every channel including alpha, which corrupts the
+            # destination alpha for semi-transparent sources (dark halo/fringe).
+            # alpha_composite does proper Porter-Duff source-over.
+            final_image.alpha_composite(image_resized, dest=(left_margin, top_margin))
 
         return final_image
     
@@ -3129,6 +3151,7 @@ class ControllerKey(ControllerInput):
                         fill_mode=media.get("fill-mode"), size=media.get("size"),
                         valign=media.get("valign"), halign=media.get("halign"),
                         opacity=media.get("opacity"), speed=media.get("speed"),
+                        blend_mode=media.get("blend-mode"),
                     ), update=False)
 
             elif len(state.get_own_actions()) > 1 and False: # Disabled for now - we might reuse it later

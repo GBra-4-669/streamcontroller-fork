@@ -208,3 +208,6 @@ pyproject.toml
 
 
 .DS_Store
+
+# Local agent/workspace files (private, not for sharing)
+.codewhale/
