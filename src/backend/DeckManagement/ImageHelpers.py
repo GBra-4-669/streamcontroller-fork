@@ -18,6 +18,8 @@ are based on the functions in the examples of: https://github.com/abcminiuser/py
 Shoutout to Dean Camera alias abcminiuser for his amazing work!
 """
 from PIL import Image, ImageOps
+import io
+
 from StreamDeck.ImageHelpers import PILHelper
 
 from gi.repository import GLib, GdkPixbuf
@@ -153,3 +155,26 @@ def image2pixbuf(img, force_transparency=False):
     except TypeError as e:
          # This usually happens if the image is a non RGB image
          return
+
+
+def to_native_key_format_compressed(deck, image, quality: int = 85) -> bytes:
+    """Convert a key image to the deck's native format at lower JPEG quality.
+
+    Mirrors StreamDeck.ImageHelpers.PILHelper.to_native_key_format, but encodes
+    at a configurable JPEG quality instead of the stock quality=100. At key
+    sizes (72x72) quality 85 is visually indistinguishable from 100, yet yields
+    a substantially smaller file — fewer USB HID reports per key write, which is
+    the dominant cost when many keys animate at once.
+    """
+    image_format = deck.key_image_format()
+    if image.size != image_format['size']:
+        image.thumbnail(image_format['size'])
+    if image_format['rotation']:
+        image = image.rotate(image_format['rotation'], expand=True)
+    if image_format['flip'][0]:
+        image = image.transpose(Image.FLIP_LEFT_RIGHT)
+    if image_format['flip'][1]:
+        image = image.transpose(Image.FLIP_TOP_BOTTOM)
+    with io.BytesIO() as compressed_image:
+        image.save(compressed_image, image_format['format'], quality=quality)
+        return compressed_image.getvalue()

@@ -2,7 +2,7 @@
 
 A personal fork of [StreamController](https://github.com/StreamController/StreamController) with a handful of quality-of-life changes I use on my own Stream Deck.
 
-![StreamDeckGB on the "beatiful" page](docs/streamdeckgb-beatiful.gif)
+![StreamDeckGB example](docs/streamdeckgb-example-3.gif)
 
 For higher-quality demonstrations, [watch the original videos on the deployed demo page](https://gbra-4-669.github.io/streamcontroller-fork/).
 
@@ -12,13 +12,13 @@ For higher-quality demonstrations, [watch the original videos on the deployed de
 - **No support.** This will almost certainly not run as-is on your machine; expect to read and modify the source to make it work on your own setup.
 - **Use at your own risk.**.
 
-All credit for the core application goes to the [StreamController](https://github.com/StreamController/StreamController) team — actively maintained, with far more features and broader hardware support than this fork will ever have. Please star, contribute to, and use the upstream project instead of this one.
+All credit for the core application goes to the [StreamController](https://github.com/StreamController/StreamController) team. It is actively maintained and has far more features and broader hardware support than this fork will ever have. Please star, contribute to, and use the upstream project instead of this one.
 
 ## What's different from upstream
 
 - **Background opacity**: opacity control for all assets (page and key backgrounds), not just foreground images.
-- **Layered images per key**: each key can hold two independent image layers on top of the page background, each with its own opacity — e.g. page background + an animated GIF + an icon, all composited together.
-- **Per-layer blend modes**: either image layer can use a CSS/SVG-style blend mode instead of a plain overlay — `normal`, `multiply`, `screen`, `darken`, `lighten`, `hard-light`, `overlay`, `color-dodge`, `color-burn`, `difference`, `exclusion`, `soft-light`. Layers blend the same way CSS `mix-blend-mode` does — each one blends against everything already painted beneath it. Set per layer from the image editor's "Blend Mode" dropdown.
+- **Layered images per key**: each key can hold two independent image layers on top of the page background, each with its own opacity. For example, a page background plus an animated GIF plus an icon, all composited together.
+- **Per-layer blend modes**: either image layer can use a CSS/SVG-style blend mode instead of a plain overlay. Supported modes are `normal`, `multiply`, `screen`, `darken`, `lighten`, `hard-light`, `overlay`, `color-dodge`, `color-burn`, `difference`, `exclusion`, `soft-light`. Layers blend the same way CSS `mix-blend-mode` does, so each one blends against everything already painted beneath it. Set per layer from the image editor's "Blend Mode" dropdown.
 - **Smart Command**: a new stateful action type. See the source for current behavior; it is actively evolving as I use it and has no stable spec.
 - **Watch GitHub Deployments**: displays a repo's deployment status on a key. Press to refresh manually, or enable automatic updates via a local `pre-push` hook.
 - **Static WebP support**: support for static `.webp` images as key and background assets.
@@ -30,7 +30,9 @@ All credit for the core application goes to the [StreamController](https://githu
 - Fedora 44
 - One Stream Deck model: the 5×3 grid
 
-That is the full list. I have not tested other distributions, desktop environments, or Stream Deck models (Mini, XL, Pedal, and so on), and I have no idea how they will behave — including whether a model with more buttons has enough headroom for layered backgrounds. Do not assume you can run two GIFs plus a page background on every key without ever hitting limits.
+And that's the full list. Upstream StreamController is Linux-only (GTK4/udev),
+so Windows and macOS aren't a "might work if you patch it" situation. They're not supported at all.
+Within Linux, I have not tested other distributions, desktop environments, or Stream Deck models (Mini, XL, Pedal, and so on), and I have no idea how they will behave, including whether a model with more buttons has enough headroom for layered backgrounds.
 
 ## Not included / not planned
 
