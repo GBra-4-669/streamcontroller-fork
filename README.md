@@ -12,13 +12,13 @@ For higher-quality demonstrations, [watch the original videos on the deployed de
 - **No support.** This will almost certainly not run as-is on your machine; expect to read and modify the source to make it work on your own setup.
 - **Use at your own risk.**.
 
-All credit for the core application goes to the [StreamController](https://github.com/StreamController/StreamController) team. Please star, contribute to, and use the upstream project — not this one. This fork exists only to scratch a few personal itches on my own hardware.
+All credit for the core application goes to the [StreamController](https://github.com/StreamController/StreamController) team — actively maintained, with far more features and broader hardware support than this fork will ever have. Please star, contribute to, and use the upstream project instead of this one.
 
 ## What's different from upstream
 
-- **Background opacity**: opacity control for all backgrounds (page and key backgrounds), not just foreground images.
-- **Layered images per key**: each key can hold two images, each with its own opacity, composited over the page background. For example: page background + one GIF + one icon per key.
-- **Per-layer blend modes**: each key layer (z1 and z2) can have its own CSS/SVG-style blend mode — `normal`, `multiply`, `screen`, `darken`, `lighten`, `hard-light`, `overlay`, `color-dodge`, `color-burn`, `difference`, `exclusion`, `soft-light` — composited cumulatively over the layer beneath it (z0 → z1 → z2), matching `mix-blend-mode` stacking. Set per layer in the image editor's "Blend Mode" dropdown.
+- **Background opacity**: opacity control for all assets (page and key backgrounds), not just foreground images.
+- **Layered images per key**: each key can hold two independent image layers on top of the page background, each with its own opacity — e.g. page background + an animated GIF + an icon, all composited together.
+- **Per-layer blend modes**: either image layer can use a CSS/SVG-style blend mode instead of a plain overlay — `normal`, `multiply`, `screen`, `darken`, `lighten`, `hard-light`, `overlay`, `color-dodge`, `color-burn`, `difference`, `exclusion`, `soft-light`. Layers blend the same way CSS `mix-blend-mode` does — each one blends against everything already painted beneath it. Set per layer from the image editor's "Blend Mode" dropdown.
 - **Smart Command**: a new stateful action type. See the source for current behavior; it is actively evolving as I use it and has no stable spec.
 - **Watch GitHub Deployments**: displays a repo's deployment status on a key. Press to refresh manually, or enable automatic updates via a local `pre-push` hook.
 - **Static WebP support**: support for static `.webp` images as key and background assets.
@@ -36,7 +36,7 @@ That is the full list. I have not tested other distributions, desktop environmen
 
 - No packaging, binaries, or installers.
 - No CI guarantees and no release channel.
-- No plans to upstream these changes. My personal requirements are too specific to my setup to be worth a pull request
+- No plans to upstream these changes. My personal requirements are too specific to my setup to be worth a pull request.
 
 ## Installation
 
@@ -44,11 +44,3 @@ There is no installer or release build. To run this:
 
 1. Clone the repository and build it.
 2. Expect to patch things for your own distribution, desktop environment, and hardware. Paths, dependencies, and Stream Deck model handling have moved on upstream since this was forked, and this fork is not kept in sync.
-
-## Why this exists
-
-These are my daily-driver customizations for my own Stream Deck workflow — deployment status monitoring, layered backgrounds, and a few quality-of-life fixes — that are not necessarily a fit for upstream as they are. I keep them as a fork rather than a diff or patch file mostly because it makes tracking changes over time easier for me.
-
-## Upstream project
-
-Please use and support the real thing: [StreamController/StreamController](https://github.com/StreamController/StreamController) — actively maintained, with far more features, broader hardware support, and an actual community behind it.
