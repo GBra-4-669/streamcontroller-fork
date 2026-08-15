@@ -101,6 +101,9 @@ class Layout(Adw.ExpanderRow):
         self.speed_row = SpeedRow(sidebar=self.margin_group.sidebar, media_key=self.media_key)
         self.add_row(self.speed_row)
 
+        self.blend_mode_row = BlendModeRow(sidebar=self.margin_group.sidebar, media_key=self.media_key)
+        self.add_row(self.blend_mode_row)
+
     def load_for_identifier(self, identifier: InputIdentifier, state: int):
         self.active_identifier = identifier
         self.active_state = state
@@ -110,6 +113,7 @@ class Layout(Adw.ExpanderRow):
         self.halign_row.load_for_identifier(identifier, state)
         self.opacity_row.load_for_identifier(identifier, state)
         self.speed_row.load_for_identifier(identifier, state)
+        self.blend_mode_row.load_for_identifier(identifier, state)
 
 
 class SizeRow(Adw.PreferencesRow):
@@ -417,6 +421,92 @@ class SpeedRow(Adw.PreferencesRow):
     def disconnect_signals(self):
         try:
             self.speed_spinner.button.disconnect_by_func(self.on_changed)
+        except:
+            pass
+
+
+class BlendModeRow(Adw.PreferencesRow):
+    BLEND_MODES = (
+        "normal", "multiply", "screen", "darken", "lighten", "hard-light",
+        "overlay", "color-dodge", "color-burn", "difference", "exclusion",
+        "soft-light",
+    )
+
+    def __init__(self, sidebar, media_key="media", **kwargs):
+        super().__init__(**kwargs)
+        self.sidebar = sidebar
+        self.media_key = media_key
+        self.active_identifier: InputIdentifier = None
+        self.active_state: int = None
+        self.build()
+        self.connect_signals()
+
+    def build(self):
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, hexpand=True,
+                                margin_start=15, margin_end=15, margin_top=15, margin_bottom=15)
+        self.set_child(self.main_box)
+
+        self.label = Gtk.Label(label="Blend Mode", hexpand=True, xalign=0)
+        self.main_box.append(self.label)
+
+        self.combo = Gtk.DropDown.new_from_strings(self.BLEND_MODES)
+        self.main_box.append(self.combo)
+
+        self.revert_button = RevertButton()
+        self.main_box.append(self.revert_button)
+
+        self.revert_button.connect("clicked", self.on_reset)
+
+    def load_for_identifier(self, identifier: InputIdentifier, state: int):
+        self.disconnect_signals()
+        self.active_identifier = identifier
+        self.active_state = state
+
+        controller = gl.app.main_win.get_active_controller()
+        if controller is None:
+            return
+
+        controller_input = controller.get_input(identifier)
+        layout_manager = controller_input.get_active_state().layout_manager if self.media_key == "media" else controller_input.get_active_state().media_2_layout_manager
+        use_page = layout_manager.get_use_page_layout_properties()
+        self.revert_button.set_sensitive(use_page.get("blend-mode", False))
+
+        self.update_values()
+        self.connect_signals()
+
+    def update_values(self):
+        self.disconnect_signals()
+        controller = gl.app.main_win.get_active_controller()
+        if controller is None:
+            return
+        controller_input = controller.get_input(self.active_identifier)
+        layout_manager = controller_input.get_active_state().layout_manager if self.media_key == "media" else controller_input.get_active_state().media_2_layout_manager
+        layout = layout_manager.get_composed_layout()
+        mode = layout.blend_mode if layout.blend_mode in self.BLEND_MODES else "normal"
+        self.combo.set_selected(self.BLEND_MODES.index(mode))
+        self.connect_signals()
+
+    def on_changed(self, widget, *args):
+        index = self.combo.get_selected()
+        if index < 0 or index >= len(self.BLEND_MODES):
+            return
+        mode = self.BLEND_MODES[index]
+        active_page = gl.app.main_win.get_active_page()
+        active_page.set_media_value(self.active_identifier, self.active_state, self.media_key, "blend-mode", mode)
+        self.revert_button.set_sensitive(True)
+
+    def on_reset(self, widget):
+        active_page = gl.app.main_win.get_active_page()
+        active_page.set_media_value(self.active_identifier, self.active_state, self.media_key, "blend-mode", None)
+        self.revert_button.set_sensitive(False)
+        self.update_values()
+
+    def connect_signals(self):
+        self.combo.connect("notify::selected", self.on_changed)
+
+    def disconnect_signals(self):
+        try:
+            self.combo.disconnect_by_func(self.on_changed)
         except:
             pass
 

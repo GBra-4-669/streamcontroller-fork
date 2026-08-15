@@ -22,3 +22,4 @@ class ImageLayout:
     size: float = None
     opacity: float = None
     speed: float = None
+    blend_mode: str = None
