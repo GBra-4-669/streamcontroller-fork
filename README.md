@@ -18,6 +18,7 @@ All credit for the core application goes to the [StreamController](https://githu
 
 - **Background opacity**: opacity control for all backgrounds (page and key backgrounds), not just foreground images.
 - **Layered images per key**: each key can hold two images, each with its own opacity, composited over the page background. For example: page background + one GIF + one icon per key.
+- **Per-layer blend modes**: each key layer (z1 and z2) can have its own CSS/SVG-style blend mode — `normal`, `multiply`, `screen`, `darken`, `lighten`, `hard-light`, `overlay`, `color-dodge`, `color-burn`, `difference`, `exclusion`, `soft-light` — composited cumulatively over the layer beneath it (z0 → z1 → z2), matching `mix-blend-mode` stacking. Set per layer in the image editor's "Blend Mode" dropdown.
 - **Smart Command**: a new stateful action type. See the source for current behavior; it is actively evolving as I use it and has no stable spec.
 - **Watch GitHub Deployments**: displays a repo's deployment status on a key. Press to refresh manually, or enable automatic updates via a local `pre-push` hook.
 - **Static WebP support**: support for static `.webp` images as key and background assets.
