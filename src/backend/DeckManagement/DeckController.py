@@ -306,6 +306,7 @@ class MediaPlayerThread(threading.Thread):
                             self.deck_controller.background.update_tiles()
 
                 # Only iterate keys/dials if there is animated content to update
+                tick_start = time.perf_counter()
                 if has_bg_video or self._needs_key_ticks():
                     #TODO: generalize
                     for key in self.deck_controller.inputs[Input.Key]:
@@ -315,8 +316,21 @@ class MediaPlayerThread(threading.Thread):
                         cast("ControllerDial", dial).on_media_player_tick()
                     # self.deck_controller.update_all_inputs()
 
+                write_start = time.perf_counter()
                 # Perform media player tasks
                 self.perform_media_player_tasks()
+                write_end = time.perf_counter()
+
+                # Profiling: split compositing (tick) from USB write time.
+                tick_ms = (write_start - tick_start) * 1000.0
+                write_ms = (write_end - write_start) * 1000.0
+                now = time.time()
+                if tick_ms + write_ms > 33.0 and now - getattr(self, "_last_perf_log", 0) > 1.0:
+                    self._last_perf_log = now
+                    log.debug(
+                        f"[perf] deck={self.deck_controller.safe_serial_number()} "
+                        f"tick_ms={tick_ms:.1f} write_ms={write_ms:.1f} total_ms={tick_ms + write_ms:.1f}"
+                    )
 
             self.media_ticks += 1
 
@@ -2831,7 +2845,7 @@ class ControllerKey(ControllerInput):
                 rgb_image = image.convert("RGB").rotate(self.deck_controller.deck.get_rotation())
 
             if self.deck_controller.is_visual():
-                native_image = PILHelper.to_native_key_format(self.deck_controller.deck, rgb_image)
+                native_image = to_native_key_format_compressed(self.deck_controller.deck, rgb_image)
                 rgb_image.close()
                 self.deck_controller.media_player.add_image_task(
                     self.index,
