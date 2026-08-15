@@ -2251,11 +2251,13 @@ class LayoutManager:
         # Create an image copy for the result
         final_image = background.copy()
 
-        # Paste the resized foreground onto the composite image at the calculated position
-        if image_resized.has_transparency_data:
-            final_image.paste(image_resized, (left_margin, top_margin), image_resized)
-        else:
-            final_image.paste(image_resized, (left_margin, top_margin))
+        # Correct source-over compositing. paste(..., mask=image) does a plain
+        # mask-weighted lerp of every channel including alpha, which corrupts the
+        # destination alpha for semi-transparent sources (dark halo/fringe).
+        # alpha_composite does proper Porter-Duff source-over.
+        if image_resized.mode != "RGBA":
+            image_resized = image_resized.convert("RGBA")
+        final_image.alpha_composite(image_resized, dest=(left_margin, top_margin))
 
         return final_image
     
