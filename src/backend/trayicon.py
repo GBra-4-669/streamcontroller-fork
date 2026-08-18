@@ -369,30 +369,38 @@ class StatusNotifierItemService(DBusService):
             self.on_watcher_appeared,
             self.on_watcher_vanished
         )
+        if self.bus.call_sync(
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "NameHasOwner",
+            GLib.Variant("(s)", (WATCHER_BUS_NAME,)),
+            GLib.VariantType("(b)"),
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+        ).unpack()[0]:
+            self.on_watcher_appeared(self.bus, WATCHER_BUS_NAME, WATCHER_BUS_NAME)
 
     def on_watcher_appeared(self, connection, name, name_owner):
-        connection.call(
-            bus_name=name,
-            object_path=WATCHER_OBJECT_PATH,
-            interface_name=WATCHER_BUS_NAME,
-            method_name="RegisterStatusNotifierItem",
-            parameters=GLib.Variant("(s)", (self.dbus_path,)),
-            reply_type=None,
-            flags=Gio.DBusCallFlags.NONE,
-            timeout_msec=-1,
-            cancellable=None,
-            callback=self.on_register_finished
-        )
-
-    def on_watcher_vanished(self, connection, name):
-        log.info(f"No {name} on the session bus, the tray icon stays hidden until one appears")
-
-    def on_register_finished(self, connection, result, *_):
         try:
-            connection.call_finish(result)
+            connection.call_sync(
+                bus_name=name,
+                object_path=WATCHER_OBJECT_PATH,
+                interface_name=WATCHER_BUS_NAME,
+                method_name="RegisterStatusNotifierItem",
+                parameters=GLib.Variant("(s)", (self.dbus_path,)),
+                reply_type=None,
+                flags=Gio.DBusCallFlags.NONE,
+                timeout_msec=-1,
+                cancellable=None,
+            )
             log.info(f"Registered tray icon {self.dbus_path} with {WATCHER_BUS_NAME}")
         except GLib.Error as e:
             log.error(f"Failed to register tray icon with {WATCHER_BUS_NAME}: {e.message}")
+
+    def on_watcher_vanished(self, connection, name):
+        log.info(f"No {name} on the session bus, the tray icon stays hidden until one appears")
 
     def unregister(self):
         if self.watcher_name_id is not None:

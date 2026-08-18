@@ -118,6 +118,7 @@ class App(Adw.Application):
             # Keep the GTK application alive without an initial window.
             self.hold()
             self.daemon_hold = True
+            gl.tray_icon.start()
         else:
             self.ensure_main_window(present=not gl.argparser.parse_args().b)
 
