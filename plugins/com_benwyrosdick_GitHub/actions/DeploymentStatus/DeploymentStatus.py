@@ -276,30 +276,34 @@ class DeploymentStatus(GitHubActionBase):
                 self._watching = False
         if state in self.PENDING:
             self.set_status_badge((255, 200, 0, 255))
+            self.safe_set_label("top", "", font_size=1)
             self.safe_set_label("center", "", font_size=1)
         elif state == "success":
             self.set_status_badge((0, 255, 0, 255))
+            self.safe_set_label("top", "", font_size=1)
             self.safe_set_label("center", "", font_size=1)
         elif state in {"failure", "error"}:
             self.set_status_badge((255, 0, 0, 255))
+            self.safe_set_label("top", "", font_size=1)
             self.safe_set_label("center", "", font_size=1)
         elif state == "inactive":
             self.set_status_badge((128, 128, 128, 255))
+            self.safe_set_label("top", "", font_size=1)
             self.safe_set_label("center", "", font_size=1)
         elif state == "no_deployment":
             self.set_status_badge((128, 128, 128, 255))
-            self.set_top_label("N/A", font_size=14, update=False)
+            self.safe_set_label("top", "N/A", font_size=14)
             self.get_input().update()
         elif state == "timeout":
             self._blink = not self._blink
             self.set_status_badge((128, 128, 128, 255) if self._blink else None)
-            self.set_top_label("TO", font_size=14, update=False)
+            self.safe_set_label("top", "TO", font_size=14)
             self.get_input().update()
             if self._blink_timer_id is None:
                 self._blink_timer_id = GLib.timeout_add(500, self._blink_timeout)
         elif state == "auth":
             self.set_status_badge((40, 100, 220, 255))
-            self.set_top_label("AUTH", font_size=12, update=False)
+            self.safe_set_label("top", "AUTH", font_size=12)
             self.get_input().update()
         elif state == "idle":
             self._set_idle()
@@ -317,6 +321,7 @@ class DeploymentStatus(GitHubActionBase):
         self._watching = False
         self._shared()["state"] = "idle"
         self.set_status_badge(None)
+        self.safe_set_label("top", "", font_size=1)
         self.safe_set_label("center", "", font_size=1)
         self.commit_render()
         return GLib.SOURCE_REMOVE

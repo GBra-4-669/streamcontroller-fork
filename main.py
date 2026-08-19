@@ -34,6 +34,10 @@ patcher.patch()
 import sys
 from loguru import logger as log
 import os
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 import time
 import asyncio
 import threading
@@ -349,6 +353,24 @@ def quit_running():
             action_interface.Activate("reopen", [], [])
             log.info("Already running, exiting")
             sys.exit(0)
+
+_process_lock_file = None
+
+def acquire_process_lock():
+    if fcntl is None:
+        return True
+    global _process_lock_file
+    lock_path = os.path.join(os.path.expanduser("~"), ".cache", "streamdeckgb.lock")
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    _process_lock_file = open(lock_path, "w")
+    try:
+        fcntl.flock(_process_lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        _process_lock_file.close()
+        _process_lock_file = None
+        log.info("Another StreamDeckGB process is already starting; exiting")
+        return False
+    return True
 
 def find_page_file(pages_dir, page_name):
     """
@@ -898,6 +920,8 @@ def main():
     if not gl.IS_MAC:
         # Dbus
         quit_running()
+        if not acquire_process_lock():
+            return
 
     reset_all_decks()
 

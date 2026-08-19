@@ -286,6 +286,11 @@ class DeckManager:
             controller.stop_reader()
 
             try:
+                controller.deck.set_brightness(0)
+            except Exception as e:
+                log.error(f"Failed to turn off deck before closing it. Error: {e}")
+
+            try:
                 controller.clear()
             except Exception as e:
                 log.error(f"Failed to clear deck before closing it. Error: {e}")

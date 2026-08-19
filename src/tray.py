@@ -70,24 +70,24 @@ class TrayIcon(DBusTrayIcon):
 
     @log.catch
     def on_show(self):
-        self.main_win.present()
+        GLib.idle_add(lambda: (self.main_win.present(), False)[1])
 
     @log.catch
     def on_settings(self):
-        self.show_settings_action.activate()
+        GLib.idle_add(lambda: (self.show_settings_action.activate(), False)[1])
 
     @log.catch
     def on_store(self):
-        self.show_store_action.activate()
+        GLib.idle_add(lambda: (self.show_store_action.activate(), False)[1])
 
     @log.catch
     def on_about(self):
-        self.main_win.present()
-        self.show_about_action.activate()
+        GLib.idle_add(lambda: (self.main_win.present(), False)[1])
+        GLib.idle_add(lambda: (self.show_about_action.activate(), False)[1])
 
     @log.catch
     def on_quit(self):
-        self.quit_app_action.activate()
+        GLib.idle_add(lambda: (self.quit_app_action.activate(), False)[1])
 
     @log.catch
     def on_restart(self):
@@ -119,7 +119,7 @@ exec "$@"
             stderr=subprocess.DEVNULL,
         )
 
-        self.quit_app_action.activate()
+        GLib.idle_add(lambda: (self.quit_app_action.activate(), False)[1])
 
 
 
