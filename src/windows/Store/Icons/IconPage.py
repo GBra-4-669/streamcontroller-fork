@@ -61,12 +61,24 @@ class IconPage(StorePage):
         if isinstance(icons, NoConnectionError):
             self.show_connection_error()
             return
+        compatible = []
+        incompatible = []
         for icon in icons:
             if icon.is_compatible:
-                section = self.compatible_section
+                compatible.append(icon)
             else:
-                section = self.incompatible_section
-            GLib.idle_add(section.append_child, IconPreview(icon_page=self, icon_data=icon))
+                incompatible.append(icon)
+
+        def append_batch(items, section, index=0):
+            batch = items[index:index + 10]
+            for icon in batch:
+                section.append_child(IconPreview(icon_page=self, icon_data=icon))
+            if index + len(batch) < len(items):
+                GLib.idle_add(append_batch, items, section, index + len(batch))
+            return GLib.SOURCE_REMOVE
+
+        GLib.idle_add(append_batch, compatible, self.compatible_section)
+        GLib.idle_add(append_batch, incompatible, self.incompatible_section)
 
         self.set_loaded()
 

@@ -61,6 +61,12 @@ class StorePageSection(Gtk.Stack):
         self.set_visible_child(self.nothing_here)
 
     def append_child(self, item):
+        item._store_search_fields = (
+            item.name_label.get_text().lower(),
+            item.author_label.get_text().lower(),
+            item.description_label.get_text().lower(),
+        )
+        item._store_search_scores = {}
         self.flow_box.append(item)
         self.set_visible_child(self.main_box)
 
@@ -85,13 +91,17 @@ class StorePageSection(Gtk.Stack):
         if search_string == "":
             return True
 
-        name = item.name_label.get_text().lower()
-        author = item.author_label.get_text().lower()
-        description = item.description_label.get_text().lower()
+        name, author, description = item._store_search_fields
 
-        name_score = fuzz.ratio(search_string, name)
-        author_score = fuzz.ratio(search_string, author)
-        description_score = fuzz.ratio(search_string, description)
+        scores = item._store_search_scores.get(search_string)
+        if scores is None:
+            scores = (
+                fuzz.ratio(search_string, name),
+                fuzz.ratio(search_string, author),
+                fuzz.ratio(search_string, description),
+            )
+            item._store_search_scores[search_string] = scores
+        name_score, author_score, description_score = scores
 
         MIN_FUZZY_SCORE = 20
 
@@ -105,13 +115,16 @@ class StorePageSection(Gtk.Stack):
         search_string = self.search_entry.get_text().strip().lower()
 
         def get_weighted_score(item):
-            name = item.name_label.get_text().lower()
-            author = item.author_label.get_text().lower()
-            description = item.description_label.get_text().lower()
-
-            name_score = fuzz.ratio(search_string, name)
-            author_score = fuzz.ratio(search_string, author)
-            description_score = fuzz.ratio(search_string, description)
+            name, author, description = item._store_search_fields
+            scores = item._store_search_scores.get(search_string)
+            if scores is None:
+                scores = (
+                    fuzz.ratio(search_string, name),
+                    fuzz.ratio(search_string, author),
+                    fuzz.ratio(search_string, description),
+                )
+                item._store_search_scores[search_string] = scores
+            name_score, author_score, description_score = scores
 
             # Adjust weights as desired
             return (name_score * 0.7) + (author_score * 0.25) + (description_score * 0.05)

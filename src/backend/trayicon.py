@@ -24,6 +24,10 @@ SNI_NODE_INFO = Gio.DBusNodeInfo.new_for_xml("""
         <property name="Status" type="s" access="read"/>
         <signal name="NewIcon"/>
         <signal name="NewTooltip"/>
+        <method name="Activate">
+            <arg type="i" name="x" direction="in"/>
+            <arg type="i" name="y" direction="in"/>
+        </method>
 
         <property name="XAyatanaLabel" type="s" access="read"/>
         <signal name="XAyatanaNewLabel">
@@ -332,7 +336,7 @@ class StatusNotifierItemService(DBusService):
     ItemIsMenu = True
     Menu = None
 
-    def __init__(self, session_bus, menu_items, path=DBusPath, menu_path=""):
+    def __init__(self, session_bus, menu_items, path=DBusPath, menu_path="", activate_callback=None):
         super().__init__(
             interface_info=SNI_NODE_INFO,
             object_path=path,
@@ -341,6 +345,7 @@ class StatusNotifierItemService(DBusService):
 
         self.bus = session_bus
         self.dbus_path = path
+        self.activate_callback = activate_callback
         self.watcher_name_id = None
         self.registered = False
 
@@ -417,6 +422,10 @@ class StatusNotifierItemService(DBusService):
     def set_items(self, items):
         self._menu.set_items(items)
 
+    def Activate(self, _x, _y):
+        if self.activate_callback is not None:
+            self.activate_callback()
+
     def set_icon(self, icon, path: str = ""):
         self.IconName = icon
         self.IconThemePath = path
@@ -441,14 +450,16 @@ class StatusNotifierItemService(DBusService):
         )
 
 class DBusTrayIcon:
-    def __init__(self, menu = None, path = "", menu_path = "", app_id = "", title = ""):
+    def __init__(self, menu = None, path = "", menu_path = "", app_id = "", title = "",
+                 activate_callback=None):
         session_bus = Gio.bus_get_sync(Gio.BusType.SESSION)
 
         self.menu = menu
 
         kwargs = {
             "session_bus": session_bus,
-            "menu_items": self.menu.get_items()
+            "menu_items": self.menu.get_items(),
+            "activate_callback": activate_callback,
         }
         if path != "":
             kwargs["path"] = path

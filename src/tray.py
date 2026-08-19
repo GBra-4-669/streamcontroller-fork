@@ -25,7 +25,14 @@ class TrayIcon(DBusTrayIcon):
         self.menu.add_menu_item(6, menu_type="separator")
         self.menu.add_menu_item(7, "Quit", callback=self.on_quit)
         self.menu.add_menu_item(8, "Quit and Restart", callback=self.on_restart)
-        super().__init__(self.menu, self.IndicatorPath, self.MenuPath, self.AppId, "StreamDeckGB")
+        super().__init__(
+            self.menu,
+            self.IndicatorPath,
+            self.MenuPath,
+            self.AppId,
+            "StreamDeckGB",
+            activate_callback=self.on_show,
+        )
         self.set_icon(self.IconName, path=self.get_icon_theme_path())
         self.set_tooltip("StreamDeckGB")
 
