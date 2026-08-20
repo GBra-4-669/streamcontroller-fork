@@ -40,3 +40,18 @@ python3 tools/perf/measure_deck_perf.py --compare before.json after.json
 
 Per-frame render timing (debug builds) shows up in the app log as
 `[perf-light] ... tick_ms=.. bg_ms=.. write_ms=.. total_ms=..`.
+
+## Follow-up (same session)
+
+- **GUI fix**: the app was relaunched with `--daemon-only` (copied from the
+  autostart entry) for the measurements, which suppresses the main window.
+  A plain launch (`streamdeckgb`) builds it - the window is back and shows.
+- **Background real-time pacing**: the background video now advances on wall
+  clock time instead of the media loop's tick count, so it plays at its
+  configured/native rate. Before: the home bg GIF (natively 25fps) played at
+  30fps, the ai page's fps=11 ran at 15fps, and the VS page's fps=16 ran at
+  30fps (integer division of the 30fps loop). Now they play at exactly their
+  intended rate, `Background.update_tiles()` is a near-free no-op between
+  frames (bg_ms ~0.00), and keys only re-render when the frame they show
+  underneath actually changed. Verified live: home tick ~7-12ms, ai page
+  median tick ~4.4ms with near-idle gaps between background frames.

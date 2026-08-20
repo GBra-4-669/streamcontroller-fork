@@ -14,6 +14,7 @@ construct a DeckController.
 import os
 import sys
 import tempfile
+import time
 import unittest
 
 from PIL import Image, ImageDraw
@@ -27,9 +28,16 @@ import globals  # noqa: F401 - resolves the app module import order
 
 sys.argv = _saved_argv
 
+# BackgroundVideoCache reads settings for its disk-cache toggle; stub it so the
+# tests run without a full app bootstrap.
+import types
+
+globals.settings_manager = types.SimpleNamespace(get_app_settings=lambda: {}, font_defaults={})
+
 from src.backend.DeckManagement import DeckController as dc
 from src.backend.DeckManagement.DeckController import (
     _GIF_FRAME_CACHE,
+    BackgroundVideo,
     KeyGIF,
     LayoutManager,
 )
@@ -194,3 +202,140 @@ class ContentCompositionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _FakeBgDeck:
+    def key_layout(self):
+        return (1, 1)
+
+    def key_count(self):
+        return 1
+
+    def key_image_format(self):
+        return {"size": (72, 72), "format": "JPEG", "rotation": 0, "flip": (False, False)}
+
+    def get_rotation(self):
+        return 0
+
+    def get_serial_number(self):
+        return "FAKE-BG"
+
+
+class _FakeBgDeckController:
+    """Enough of a DeckController for BackgroundVideo + Background."""
+
+    def __init__(self):
+        self.deck = _FakeBgDeck()
+        self.key_spacing = (36, 36)
+        self.active_page = None
+
+    def get_key_image_size(self):
+        return (72, 72)
+
+    def generate_alpha_key(self):
+        return Image.new("RGBA", (72, 72), (0, 0, 0, 0))
+
+
+class BackgroundPacingTest(unittest.TestCase):
+    """The background video must pace itself in real time: advance only when
+    the current frame's delay elapsed, and return None (no change) otherwise,
+    so keys can skip re-rendering."""
+
+    def _make_video(self, path, fps=None):
+        fake_dc = _FakeBgDeckController()
+        video = BackgroundVideo(fake_dc, path, loop=True, fps=fps, opacity=1.0)
+        # Shut the cache's background thread down quietly.
+        video._closed = True
+        return video
+
+    def test_native_gif_delay_pacing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "bg.gif")
+            make_gif(path, frames=4)  # duration=40ms per frame
+
+            video = self._make_video(path)
+            self.assertIsNone(video.fps)  # native pacing
+            self.assertEqual(video._gif_delays, [40, 40, 40, 40])
+
+            tiles = video.get_next_tiles()
+            self.assertIsNotNone(tiles)  # first call shows frame 0
+            self.assertEqual(video.active_frame, 0)
+
+            # Immediately: same frame still on screen -> no change.
+            self.assertIsNone(video.get_next_tiles())
+
+            time.sleep(0.05)
+            tiles = video.get_next_tiles()
+            self.assertIsNotNone(tiles)  # 50ms >= 40ms delay -> advanced
+            self.assertEqual(video.active_frame, 1)
+
+            video.close()
+
+    def test_explicit_fps_pacing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "bg.gif")
+            make_gif(path, frames=4)
+
+            video = self._make_video(path, fps=10)  # 100ms per frame
+            self.assertEqual(video._current_frame_delay(), 0.1)
+            video.get_next_tiles()
+            time.sleep(0.06)  # < 100ms -> still frame 0
+            self.assertIsNone(video.get_next_tiles())
+            time.sleep(0.05)  # total 110ms >= 100ms -> advanced
+            self.assertIsNotNone(video.get_next_tiles())
+            self.assertEqual(video.active_frame, 1)
+
+            video.close()
+
+    def test_loop_wraps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "bg.gif")
+            make_gif(path, frames=3)  # 40ms delays
+
+            video = self._make_video(path)
+            video.active_frame = 2
+            video._last_frame_time = None  # force "first" path -> frame 0 shown
+            tiles = video.get_next_tiles()
+            self.assertIsNotNone(tiles)
+            self.assertEqual(video.active_frame, 0)
+
+            video.close()
+
+
+class _FakeBackground:
+    """Minimal stand-in so Background.update_tiles can be exercised."""
+
+    def __init__(self, video):
+        self.video = video
+        self.frame_counter = 0
+
+
+class BackgroundFrameCounterTest(unittest.TestCase):
+    def test_update_tiles_bumps_counter_only_on_change(self):
+        from src.backend.DeckManagement.DeckController import Background
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "bg.gif")
+            make_gif(path, frames=4)
+
+            fake_dc = _FakeBgDeckController()
+            video = BackgroundVideo(fake_dc, path, loop=True, fps=None, opacity=1.0)
+            video._closed = True
+            bg = Background(fake_dc)
+            bg.video = video
+
+            # First update: tiles swap, counter bumps.
+            old = bg.frame_counter
+            bg.update_tiles()
+            self.assertEqual(bg.frame_counter, old + 1)
+
+            # Immediately: no frame advance -> no swap, no bump.
+            old = bg.frame_counter
+            bg.update_tiles()
+            self.assertEqual(bg.frame_counter, old)
+
+            time.sleep(0.05)
+            bg.update_tiles()
+            self.assertEqual(bg.frame_counter, old + 1)
+
+            video.close()

@@ -365,10 +365,10 @@ class MediaPlayerThread(threading.Thread):
                 if self.deck_controller.background.video is not None:
                     if self.deck_controller.background.video.page is self.deck_controller.active_page:
                         has_bg_video = True
-                        # There is a background video
-                        video_each_nth_frame = self.FPS // self.deck_controller.background.video.fps
-                        if self.media_ticks % video_each_nth_frame == 0:
-                            self.deck_controller.background.update_tiles()
+                        # The background video paces itself in real time
+                        # (configured or native fps); update_tiles() is a cheap
+                        # no-op on ticks where the current frame is still due.
+                        self.deck_controller.background.update_tiles()
 
                 # Only iterate keys/dials if there is animated content to update
                 tick_start = time.perf_counter()
@@ -1176,7 +1176,7 @@ class DeckController:
             path=config.get("media-path"),
             update=update,
             loop=config.get("loop", False),
-            fps=config.get("fps", 30),
+            fps=config.get("fps"),  # None -> pace by the file's native timing
             opacity=config.get("opacity", 1.0),
         )
         if gl.DEBUG:
@@ -1665,6 +1665,10 @@ class Background:
         # Cached tiles are owned here; renderers always receive independent copies.
         self._composed_tiles: dict[tuple[int, ...], list[Image.Image]] = {}
         self._composed_tiles_lock = threading.RLock()
+        # Monotonic counter bumped whenever the background tiles actually
+        # changed (new image/video frame). Keys track it so they only re-render
+        # when the frame they show underneath them really changed.
+        self.frame_counter: int = 0
 
     def invalidate_composed_tiles(self) -> None:
         with self._composed_tiles_lock:
@@ -1788,7 +1792,13 @@ class Background:
         if self.image is not None:
             new_tiles = self.image.get_tiles()
         elif self.video is not None:
+            # The video paces itself in real time; get_next_tiles() returns
+            # None when the current frame is still being shown (nothing
+            # changed), so we skip the swap, the composed-tile invalidation
+            # and the frame_counter bump entirely.
             new_tiles = self.video.get_next_tiles()
+            if new_tiles is None:
+                return
         else:
             new_tiles = [self.deck_controller.generate_alpha_key() for _ in range(self.deck_controller.deck.key_count())]
 
@@ -1796,6 +1806,7 @@ class Background:
             old_tiles = self.tiles
             self.tiles = new_tiles
             self.invalidate_composed_tiles()
+        self.frame_counter += 1
 
         for tile in old_tiles:
             if tile is not None:
@@ -1883,6 +1894,8 @@ class BackgroundVideo(BackgroundVideoCache):
         self.deck_controller = deck_controller
         self.video_path = video_path
         self.loop = loop
+        # fps may be None -> pace by the file's own timing (GIF frame delays /
+        # container fps) instead of the media loop's tick count.
         self.fps = fps
         self.opacity = max(0.0, min(1.0, opacity))
 
@@ -1892,15 +1905,76 @@ class BackgroundVideo(BackgroundVideoCache):
 
         super().__init__(video_path, deck_controller=deck_controller)
 
-    def get_next_tiles(self) -> list[Image.Image]:
-        # return [self.deck_controller.generate_alpha_key() for _ in range(self.deck_controller.deck.key_count())]
-        self.active_frame += 1
+        # Real-time pacing state. The background advances on wall-clock time so
+        # the animation plays at its configured (or native) rate regardless of
+        # the media loop's tick cadence, and keys only re-render when the frame
+        # actually changed.
+        self.frame_changed: bool = False
+        self._last_frame_time: float = None
+        self._native_fps: float = None
+        self._gif_delays: list[int] = []
+
+        if self._is_gif():
+            # Per-frame delays (metadata only - cheap), like KeyGIF.
+            try:
+                for i in range(self.n_frames):
+                    self.gif.seek(i)
+                    delay = self.gif.info.get("duration", 100)
+                    if delay <= 0:
+                        delay = 100
+                    self._gif_delays.append(delay)
+                self.gif.seek(0)
+            except Exception:
+                self._gif_delays = []
+        else:
+            try:
+                native = self.cap.get(cv2.CAP_PROP_FPS)
+                if native and native > 0.0:
+                    self._native_fps = native
+            except Exception:
+                self._native_fps = None
+
+    def _current_frame_delay(self) -> float:
+        """Seconds the current frame should stay on screen."""
+        if self.fps:
+            return 1.0 / max(1, self.fps)
+        if self._gif_delays:
+            delay_ms = self._gif_delays[min(self.active_frame, len(self._gif_delays) - 1)]
+            return max(0.02, delay_ms / 1000.0)
+        return 1.0 / (self._native_fps or 30.0)
+
+    def get_next_tiles(self) -> list[Image.Image] | None:
+        """Advance the background by wall-clock time.
+
+        Returns the current frame's tiles (copies) when a new frame is due, or
+        None when the current frame is still being shown - the caller then
+        leaves the existing tiles untouched.
+        """
+        now = time.monotonic()
+        if self._last_frame_time is None:
+            self._last_frame_time = now
+            self.active_frame = 0
+            self.frame_changed = True
+        else:
+            delay = self._current_frame_delay()
+            elapsed = now - self._last_frame_time
+            if elapsed < delay:
+                self.frame_changed = False
+                return None
+            # Fixed-step cadence; catch up (skip) any overdue frames so the
+            # animation keeps its speed after a stall.
+            n_advance = int(elapsed / delay)
+            self._last_frame_time += delay * n_advance
+            self.active_frame += n_advance
+            self.frame_changed = True
 
         if self.active_frame >= self.n_frames:
             if self.loop:
-                self.active_frame = 0
+                self.active_frame %= self.n_frames
+            else:
+                self.active_frame = self.n_frames - 1
 
-        tiles =  self.get_tiles(self.active_frame)
+        tiles = self.get_tiles(self.active_frame)
         try:
             copied_tiles = [tile.copy() for tile in tiles]
         except:
@@ -3053,6 +3127,10 @@ class ControllerKey(ControllerInput):
         self._last_ui_update_time: float = 0.0
         self._last_ui_press_state: bool = self.press_state
 
+        # Background frame the last render showed; the key only re-renders when
+        # the background frame changed (or its own content did).
+        self._last_bg_frame: int = -1
+
     def on_hold_timer_end(self):
         state = self.get_active_state()
         state.own_actions_event_callback_threaded(
@@ -3167,12 +3245,16 @@ class ControllerKey(ControllerInput):
                         if self.media_ticks % every_n_frames == 0:
                             needs_update = True
                             break
-            elif self.deck_controller.background.video is not None or state.label_manager.get_has_scroll_labels():
-                # Other content types
+            elif (self.deck_controller.background.video is not None
+                  and self.deck_controller.background.frame_counter != self._last_bg_frame) \
+                    or state.label_manager.get_has_scroll_labels():
+                # The background frame this key shows changed (or the labels are
+                # scrolling): re-composite the cached content over the new frame.
                 needs_update = True
 
             if needs_update:
                 self.update(priority=TASK_PRIORITY_LOW)
+                self._last_bg_frame = self.deck_controller.background.frame_counter
 
     def event_callback(self, press_state):
         screensaver_was_showing = self.deck_controller.screen_saver.showing

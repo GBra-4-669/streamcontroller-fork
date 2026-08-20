@@ -173,8 +173,7 @@ def main():
     ap.add_argument("--pace", type=float, default=0.0,
                     help="Sleep this many seconds per tick (e.g. 0.033 to mimic the "
                          "30fps media loop, which changes GIF frame-due cadence)")
-    args = ap.parse_args()
-    sys.argv = _saved_argv
+    args = ap.parse_args(_saved_argv[1:])  # explicit argv: globals may have touched sys.argv
 
     with open(os.path.join(PAGES, f"{args.page}.json")) as f:
         page_dict = json.load(f)
@@ -188,7 +187,7 @@ def main():
     bg_path = bg.get("media-path") or bg.get("path")
     if bg_path and os.path.isfile(bg_path) and is_video(bg_path):
         dc.background.set_video(BackgroundVideo(dc, bg_path, loop=True,
-                                                fps=bg.get("fps", 30) or 30,
+                                                fps=bg.get("fps"),  # None -> native pacing
                                                 opacity=bg.get("opacity", 1.0) or 1.0),
                                 update=False)
 
@@ -222,20 +221,24 @@ def main():
 
     # Warm up GIF frame caches (decode every frame once) + bg cache
     print("Warming caches ...", file=sys.stderr)
+    if dc.background.video is not None:
+        try:
+            for f in range(dc.background.video.n_frames):
+                dc.background.video.get_tiles(f)  # populates the bg frame cache
+        except Exception:
+            pass
     for _ in range(120):
         dc.background.update_tiles()
         for key in dc.inputs[Input.Key]:
             key.on_media_player_tick()
 
     # Measure
-    n_bg = max(1, dc.media_player.FPS // (dc.background.video.fps if dc.background.video else 1))
     tick_times = []
     per_key = {k.identifier.json_identifier: {"time": 0.0, "renders": 0, "updates": 0} for k in dc.inputs[Input.Key]}
     for i in range(args.ticks):
         t0 = time.perf_counter()
         if dc.background.video is not None:
-            if i % n_bg == 0:
-                dc.background.update_tiles()
+            dc.background.update_tiles()  # self-paced in real time
         for key in dc.inputs[Input.Key]:
             kt0 = time.perf_counter()
             before = key.media_ticks
