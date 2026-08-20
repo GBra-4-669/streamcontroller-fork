@@ -307,6 +307,33 @@ class App(Adw.Application):
     def register_sigint_handler(self):
         signal.signal(signal.SIGINT, self.on_quit)
 
+        # System shutdown/logout: systemd sends SIGTERM to the session (SIGHUP
+        # covers some logouts/terminal closes). The deck stays USB-powered
+        # while the machine is off, so black it immediately - the full quit
+        # path may not finish before systemd SIGKILLs us. Two delivery paths:
+        # GLib.unix_signal_add() fires while the GTK main loop is running
+        # (i.e. when the main thread is blocked in C), signal.signal() as a
+        # fallback when it is not.
+        signal.signal(signal.SIGTERM, self.on_shutdown_signal)
+        signal.signal(signal.SIGHUP, self.on_shutdown_signal)
+        try:
+            GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGTERM, self.on_shutdown_signal)
+            GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGHUP, self.on_shutdown_signal)
+        except Exception as e:
+            log.warning(f"Could not register GLib shutdown signals: {e}")
+
+    def on_shutdown_signal(self, *args):
+        """SIGTERM/SIGHUP: turn the deck(s) off first, then quit normally."""
+        if getattr(self, "_shutdown_in_progress", False):
+            return
+        self._shutdown_in_progress = True
+        log.info("Shutdown signal received - turning the deck(s) off")
+        try:
+            self.deck_manager.black_all_decks()
+        except Exception as e:
+            log.error(f"Failed to turn the deck(s) off on shutdown: {e}")
+        self.on_quit(*args)
+
     def add_signals(self):
         self.update_all_assets_action = Gio.SimpleAction.new("update-all-assets", None)
         self.update_all_assets_action.connect("activate", self.update_all_assets)

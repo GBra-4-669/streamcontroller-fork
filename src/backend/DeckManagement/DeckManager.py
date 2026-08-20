@@ -265,6 +265,23 @@ class DeckManager:
             return
         self.check_for_errors_if_window_ready()
 
+    def black_all_decks(self):
+        """Set every open deck's brightness to 0 without touching anything else.
+
+        Used when the system is going down (SIGTERM on shutdown/logout): the
+        deck stays USB-powered while the machine is off, so the screens would
+        otherwise stay lit. Runs before the full quit path, which may not get
+        to finish before systemd sends SIGKILL.
+        """
+        for controller in self.deck_controller:
+            try:
+                if controller.deck is None or not controller.deck.is_open():
+                    continue
+                controller.deck.set_brightness(0)
+                log.info(f"Turned off deck {controller.safe_serial_number()} for shutdown")
+            except Exception as e:
+                log.error(f"Failed to turn off deck {controller.safe_serial_number()}: {e}")
+
     def close_all(self):
         log.info("Closing all decks")
         for controller in self.deck_controller:
