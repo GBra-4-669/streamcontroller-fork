@@ -19,6 +19,7 @@ import os
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.backend.DeckManagement.DeckController import ControllerInput
+    from src.backend.DeckManagement.DeckController import LayoutManager
 
 class SingleKeyAsset:
     def __init__(self, controller_input: "ControllerInput"):
@@ -27,6 +28,17 @@ class SingleKeyAsset:
 
     def get_raw_image(self) -> Image.Image:
         return Image.open(os.path.join("Assets", "images", "error.png"))
-    
+
+    def get_render_layer(self, layout_manager: "LayoutManager", background_size: tuple[int, int]) -> Image.Image | None:
+        """Return this asset already resized to its layout size for the given
+        background, or None to let the caller fall back to the plain path.
+
+        Animated assets advance their frame here (once per render). Callers
+        must not mutate or close the returned image - it may be shared/cached.
+        The default implementation returns None, keeping the per-render resize
+        inside LayoutManager.add_image_to_background().
+        """
+        return None
+
     def close(self):
         pass

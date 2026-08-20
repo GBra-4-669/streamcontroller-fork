@@ -41,6 +41,7 @@ from src.backend.DeckManagement.DeckController import (
     KeyGIF,
     LayoutManager,
 )
+from src.backend.DeckManagement.Subclasses.KeyLayout import ImageLayout
 from src.backend.DeckManagement.InputIdentifier import Input
 from src.backend.DeckManagement.blend_modes import blend
 
@@ -68,6 +69,10 @@ class FakeKeyInput:
 
     def __init__(self, identifier=None):
         self.identifier = identifier if identifier is not None else Input.Key("0x0")
+        self.deck_controller = None
+
+    def _mark_content_dirty(self):
+        pass
 
 
 class GifFrameCacheTest(unittest.TestCase):
@@ -111,15 +116,15 @@ class GifFrameCacheTest(unittest.TestCase):
             # A 3-frame 64x64 GIF is ~12k pixels; temporarily shrink the budget
             # below one frame to prove eviction happens and the cache stays
             # within budget.
-            original_max = dc._GIF_FRAME_CACHE_MAX_PIXELS
+            original_max = _GIF_FRAME_CACHE._max_pixels
             try:
-                dc._GIF_FRAME_CACHE_MAX_PIXELS = 5_000
+                _GIF_FRAME_CACHE._max_pixels = 5_000
                 for _ in range(6):
                     gif.get_next_frame()  # forces loop + re-decode + eviction
                 self.assertLessEqual(_GIF_FRAME_CACHE._pixels, 5_000)
                 self.assertLessEqual(len(_GIF_FRAME_CACHE._cache), 3)
             finally:
-                dc._GIF_FRAME_CACHE_MAX_PIXELS = original_max
+                _GIF_FRAME_CACHE._max_pixels = original_max
                 _GIF_FRAME_CACHE._cache.clear()
                 _GIF_FRAME_CACHE._order.clear()
                 _GIF_FRAME_CACHE._pixels = 0
@@ -339,3 +344,61 @@ class BackgroundFrameCounterTest(unittest.TestCase):
             self.assertEqual(bg.frame_counter, old + 1)
 
             video.close()
+
+
+class AssetRenderLayerTest(unittest.TestCase):
+    """Assets return their layer pre-resized to the layout size, cached so the
+    resize happens once (per layout for static images, per frame for GIFs)."""
+
+    def test_input_image_layer_cached_per_layout(self):
+        from src.backend.DeckManagement.Subclasses.KeyImage import InputImage
+
+        fake = FakeKeyInput()
+        img = InputImage(fake, Image.new("RGBA", (192, 192), (10, 20, 30, 255)))
+        lm = LayoutManager(fake)
+        lm.set_action_layout(ImageLayout(size=1.0, fill_mode="cover"), update=False)
+
+        a = img.get_render_layer(lm, (72, 72))
+        b = img.get_render_layer(lm, (72, 72))
+        self.assertIs(a, b, "same layout must reuse the cached resize")
+        self.assertEqual(a.size, (72, 72))
+
+        # Different layout size -> different cached layer.
+        lm.set_action_layout(ImageLayout(size=1.5, fill_mode="cover"), update=False)
+        c = img.get_render_layer(lm, (72, 72))
+        self.assertIsNot(a, c)
+        self.assertEqual(c.size, (108, 108))
+        img.close()
+
+    def test_keygif_render_layer_cached_across_loop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "g.gif")
+            make_gif(path, frames=3)
+            gif = KeyGIF(controller_key=FakeControllerKey(), gif_path=path, fps=10)
+            fake = FakeKeyInput()
+            lm = LayoutManager(fake)
+            lm.set_action_layout(ImageLayout(size=1.0, fill_mode="cover"), update=False)
+
+            first = gif.get_render_layer(lm, (72, 72))  # frame 0 -> decode + resize
+            self.assertEqual(first.size, (72, 72))
+            gif.get_render_layer(lm, (72, 72))  # frame 1
+            gif.get_render_layer(lm, (72, 72))  # frame 2
+            wrapped = gif.get_render_layer(lm, (72, 72))  # loops back to frame 0
+            self.assertIs(wrapped, first, "frame 0's resize must be reused after the loop")
+            gif.close()
+
+    def test_pre_resized_matches_plain_composition(self):
+        from src.backend.DeckManagement.Subclasses.KeyImage import InputImage
+
+        fake = FakeKeyInput()
+        img = InputImage(fake, Image.new("RGBA", (192, 192), (10, 20, 30, 255)))
+        lm = LayoutManager(fake)
+        lm.set_action_layout(ImageLayout(size=1.0, fill_mode="cover"), update=False)
+        bg = Image.new("RGBA", (72, 72), (200, 100, 50, 255))
+
+        plain = lm.add_image_to_background(image=img.get_raw_image(), background=bg.copy())
+        layer = img.get_render_layer(lm, (72, 72))
+        pre = lm.add_image_to_background(image=layer, background=bg.copy(), pre_resized=True)
+
+        self.assertEqual(list(plain.tobytes()), list(pre.tobytes()))
+        img.close()

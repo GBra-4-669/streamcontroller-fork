@@ -102,14 +102,20 @@ _GIF_FRAME_CACHE_MAX_SIDE = 256  # longest side of a cached frame (see KeyGIF)
 
 
 class _GifFrameCache:
-    def __init__(self) -> None:
-        self._cache: dict[tuple[str, int], Image.Image] = {}
-        self._order: list[tuple[str, int]] = []
+    """LRU of decoded images keyed by a tuple (e.g. (path, frame) for raw GIF
+    frames, or (path, frame, size, fill) for resized key layers), evicted by a
+    pixel budget. Entries are dropped without close(): a renderer on another
+    thread may still hold a reference, and PIL's close() frees the backing
+    buffer out from under it."""
+
+    def __init__(self, max_pixels: int = _GIF_FRAME_CACHE_MAX_PIXELS) -> None:
+        self._max_pixels = max_pixels
+        self._cache: dict[tuple, Image.Image] = {}
+        self._order: list[tuple] = []
         self._pixels = 0
         self._lock = threading.Lock()
 
-    def get(self, path: str, frame: int) -> Image.Image | None:
-        key = (path, frame)
+    def get(self, key: tuple) -> Image.Image | None:
         with self._lock:
             image = self._cache.get(key)
             if image is not None:
@@ -118,8 +124,7 @@ class _GifFrameCache:
                 self._order.append(key)
             return image
 
-    def put(self, path: str, frame: int, image: Image.Image) -> None:
-        key = (path, frame)
+    def put(self, key: tuple, image: Image.Image) -> None:
         pixels = image.size[0] * image.size[1]
         with self._lock:
             existing = self._cache.get(key)
@@ -129,7 +134,7 @@ class _GifFrameCache:
                 self._pixels += pixels
             self._cache[key] = image
             self._order.append(key)
-            while self._pixels > _GIF_FRAME_CACHE_MAX_PIXELS and self._order:
+            while self._pixels > self._max_pixels and self._order:
                 evict_key = self._order.pop(0)
                 evicted = self._cache.pop(evict_key, None)
                 if evicted is not None:
@@ -137,6 +142,9 @@ class _GifFrameCache:
 
 
 _GIF_FRAME_CACHE = _GifFrameCache()
+# Resized key layers (per GIF path/frame + target size + fill mode). Stored
+# small (<= target size), so a 90-frame GIF at 136px costs ~6.6 MB.
+_GIF_RENDER_CACHE = _GifFrameCache(max_pixels=16_000_000)
 
 
 @dataclass
@@ -2091,16 +2099,41 @@ class KeyGIF(SingleKeyAsset):
         # the cache, so a 600x600 frame would otherwise be BILINEAR-resized on
         # every render (~2ms each); a 256px source resizes in ~0.4ms and the
         # cap also makes the cache hold ~5x more frames.
-        frame = _GIF_FRAME_CACHE.get(os.path.abspath(self.gif_path), self.active_frame)
+        frame = _GIF_FRAME_CACHE.get((os.path.abspath(self.gif_path), self.active_frame))
         if frame is None:
             self.gif.seek(self.active_frame)
             frame = self.gif.convert("RGBA")
             if max(frame.size) > _GIF_FRAME_CACHE_MAX_SIDE:
                 frame.thumbnail((_GIF_FRAME_CACHE_MAX_SIDE, _GIF_FRAME_CACHE_MAX_SIDE),
                                 Image.Resampling.BILINEAR)
-            _GIF_FRAME_CACHE.put(os.path.abspath(self.gif_path), self.active_frame, frame)
+            _GIF_FRAME_CACHE.put((os.path.abspath(self.gif_path), self.active_frame), frame)
         return frame
     
+    def get_render_layer(self, layout_manager: "LayoutManager", background_size: tuple[int, int]) -> Image.Image | None:
+        """Advance to the current frame and return it resized to the layout
+        size, cached per (path, frame, size, fill) so each frame of a looping
+        GIF is resized once instead of on every render."""
+        layout = layout_manager.get_composed_layout()
+        image_size = (int(background_size[0] * layout.size), int(background_size[1] * layout.size))
+        if 0 in image_size:
+            self.get_next_frame()  # still advance - the caller skips rendering
+            return None
+
+        frame = self.get_next_frame()
+        cache_key = (os.path.abspath(self.gif_path), self.active_frame, image_size, layout.fill_mode)
+        cached = _GIF_RENDER_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
+        if layout.fill_mode == "stretch":
+            resized = frame.resize(image_size, Image.Resampling.BILINEAR)
+        elif layout.fill_mode == "cover":
+            resized = ImageOps.cover(frame, image_size, Image.Resampling.BILINEAR)
+        else:
+            resized = ImageOps.contain(frame, image_size, Image.Resampling.BILINEAR)
+        _GIF_RENDER_CACHE.put(cache_key, resized)
+        return resized
+
     def get_frame_delay(self) -> float:
         """Get delay for current frame in seconds, adjusted by speed multiplier."""
         if self.active_frame < 0 or self.active_frame >= len(self.frame_delays):
@@ -2488,7 +2521,7 @@ class LayoutManager:
 
         gl.app.main_win.sidebar.key_editor.image_editor.load_for_identifier(self.controller_input.identifier, self.controller_input.state)
 
-    def add_image_to_background(self, image: Image.Image, background: Image.Image) -> Image.Image:
+    def add_image_to_background(self, image: Image.Image, background: Image.Image, pre_resized: bool = False) -> Image.Image:
         if image is None:
             return background
         layout = self.get_composed_layout()
@@ -2499,7 +2532,11 @@ class LayoutManager:
         if 0 in image_size:
             return background.copy()
 
-        if layout.fill_mode == "stretch":
+        if pre_resized:
+            # The asset already returned its layer at the composed layout size
+            # (cached per frame/layout); it may be shared, so never mutate it.
+            image_resized = image
+        elif layout.fill_mode == "stretch":
             image_resized = image.resize(image_size, Image.Resampling.BILINEAR)
         elif layout.fill_mode == "cover":
             image_resized = ImageOps.cover(image, image_size, Image.Resampling.BILINEAR)
@@ -2515,6 +2552,8 @@ class LayoutManager:
         if layout.opacity < 1.0:
             if image_resized.mode != "RGBA":
                 image_resized = image_resized.convert("RGBA")
+            elif pre_resized:
+                image_resized = image_resized.copy()  # never mutate cached layers
             alpha = image_resized.getchannel("A")
             image_resized.putalpha(alpha.point([int(i * layout.opacity) for i in range(256)]))
 
@@ -3117,6 +3156,12 @@ class ControllerKey(ControllerInput):
         self._content_cache: Image.Image = None
         self._content_cache_sig: tuple = None
 
+        # Static overlay (media-2 + labels + decorations) for keys whose media
+        # is animated - composited once per static change, then each frame is
+        # put underneath it. See _compose_animated_with_static_overlay.
+        self._static_overlay: Image.Image = None
+        self._static_overlay_sig: tuple = None
+
         # Cached "does this key use a blend mode" check, keyed by content
         # version. Blend layers need the live background, so those keys skip
         # the content cache and render directly.
@@ -3373,32 +3418,121 @@ class ControllerKey(ControllerInput):
         if self._content_cache is not None and self._content_cache_sig == sig:
             return self._content_cache
 
-        base = Image.new("RGBA", self.get_image_size(), (0, 0, 0, 0))
+        key_size = self.get_image_size()
+
+        if state.key_video is not None and state.media_2_video is None:
+            # Animated media over a static partner (the common GIF + icon/badge
+            # setup): media-2 + labels + decorations are composited once per
+            # static change, and each frame only re-composites the moving layer
+            # over that cached overlay.
+            content = self._compose_animated_with_static_overlay(state, key_size)
+        else:
+            content = self._compose_content_layers(state, key_size)
+
+        if self._content_cache is not None:
+            self._content_cache.close()
+        self._content_cache = content
+        self._content_cache_sig = sig
+        return content
+
+    def _static_overlay_signature(self, state: "ControllerKeyState") -> tuple:
+        return (
+            id(state),
+            self._content_version,
+            self.press_state,
+            self.deck_controller.screen_saver.showing,
+            self.has_unavailable_action(),
+            tuple(
+                (state.label_manager.frames[p]["position"], state.label_manager.frames[p]["wait"])
+                for p in ("top", "center", "bottom")
+            ),
+        )
+
+    def _compose_animated_with_static_overlay(self, state: "ControllerKeyState", key_size: tuple[int, int]) -> Image.Image:
+        """Content for a key whose media is animated and media-2 is static.
+
+        The static part (media-2 + labels + decorations) is cached on the key
+        and re-composited only when it changes; per frame we only put the new
+        frame underneath it.
+        """
+        static_sig = self._static_overlay_signature(state)
+        if self._static_overlay_sig != static_sig:
+            base = Image.new("RGBA", key_size, (0, 0, 0, 0))
+            if state.media_2_image is not None:
+                layer = state.media_2_image.get_render_layer(state.media_2_layout_manager, key_size)
+                if layer is not None:
+                    composed = state.media_2_layout_manager.add_image_to_background(
+                        image=layer, background=base, pre_resized=True)
+                    base.close()
+                    base = composed
+
+            labeled = state.label_manager.add_labels_to_image(base)
+            base.close()
+            labeled = self._apply_decorations(state, labeled)
+
+            if self._static_overlay is not None:
+                self._static_overlay.close()
+            self._static_overlay = labeled
+            self._static_overlay_sig = static_sig
+
+        content = Image.new("RGBA", key_size, (0, 0, 0, 0))
+        layer = state.key_video.get_render_layer(state.layout_manager, key_size)
+        if layer is not None:
+            composed = state.layout_manager.add_image_to_background(image=layer, background=content, pre_resized=True)
+            if composed is not content:
+                content.close()
+                content = composed
+        content.alpha_composite(self._static_overlay)
+
+        if self.is_pressed():
+            content = self.shrink_image(content)
+        return content
+
+    def _compose_content_layers(self, state: "ControllerKeyState", key_size: tuple[int, int]) -> Image.Image:
+        """General content composition: both layers + labels + decorations,
+        with assets that support it returning pre-resized (cached) layers."""
+        base = Image.new("RGBA", key_size, (0, 0, 0, 0))
         key_image = base
-        for image, layout_manager in (
-            (state.key_image.get_raw_image() if state.key_image is not None else
-             state.key_video.get_raw_image() if state.key_video is not None else None, state.layout_manager),
-            (state.media_2_image.get_raw_image() if state.media_2_image is not None else
-             state.media_2_video.get_raw_image() if state.media_2_video is not None else None, state.media_2_layout_manager),
+        for asset, layout_manager in (
+            (state.key_video if state.key_video is not None else state.key_image, state.layout_manager),
+            (state.media_2_video if state.media_2_video is not None else state.media_2_image, state.media_2_layout_manager),
         ):
-            if image is not None:
-                composed = layout_manager.add_image_to_background(image=image, background=key_image)
-                if key_image is not base:
-                    key_image.close()
-                key_image = composed
+            if asset is None:
+                continue
+            layer = asset.get_render_layer(layout_manager, key_size)
+            if layer is not None:
+                composed = layout_manager.add_image_to_background(image=layer, background=key_image, pre_resized=True)
+            else:
+                raw = asset.get_raw_image()
+                if raw is None:
+                    continue
+                composed = layout_manager.add_image_to_background(image=raw, background=key_image)
+            if key_image is not base:
+                key_image.close()
+            key_image = composed
 
         labeled_image = state.label_manager.add_labels_to_image(key_image)
+
+        if key_image is not base:
+            key_image.close()
+        base.close()
 
         if self.is_pressed():
             labeled_image = self.shrink_image(labeled_image)
 
+        labeled_image = self._apply_decorations(state, labeled_image)
+        return labeled_image
+
+    def _apply_decorations(self, state: "ControllerKeyState", image: Image.Image) -> Image.Image:
+        """Warning point, border, status badge and overlay - all drawn after
+        the labels (and the pressed shrink), exactly like the direct path."""
         if self.has_unavailable_action() and not self.deck_controller.screen_saver.showing:
-            labeled_image = self.add_warning_point(labeled_image)
+            image = self.add_warning_point(image)
 
         if state._border_color is not None:
-            draw = ImageDraw.Draw(labeled_image)
+            draw = ImageDraw.Draw(image)
             draw.rounded_rectangle(
-                (2, 2, labeled_image.width - 3, labeled_image.height - 3),
+                (2, 2, image.width - 3, image.height - 3),
                 outline=state._border_color,
                 width=7,
                 radius=8,
@@ -3406,10 +3540,10 @@ class ControllerKey(ControllerInput):
             del draw
 
         if state._status_badge is not None:
-            draw = ImageDraw.Draw(labeled_image)
-            size = max(14, round(min(labeled_image.size) * 0.22) + 2)
+            draw = ImageDraw.Draw(image)
+            size = max(14, round(min(image.size) * 0.22) + 2)
             margin = max(4, round(size * 0.18))
-            left = labeled_image.width - margin - size
+            left = image.width - margin - size
             top = margin
             draw.ellipse(
                 (left, top, left + size, top + size),
@@ -3420,19 +3554,11 @@ class ControllerKey(ControllerInput):
             del draw
 
         if state._overlay:
-            overlay = state._overlay.resize(labeled_image.size)
-            labeled_image.alpha_composite(overlay)
+            overlay = state._overlay.resize(image.size)
+            image.alpha_composite(overlay)
             overlay.close()
 
-        if key_image is not base:
-            key_image.close()
-        base.close()
-
-        if self._content_cache is not None:
-            self._content_cache.close()
-        self._content_cache = labeled_image
-        self._content_cache_sig = sig
-        return labeled_image
+        return image
 
     def _get_current_image_direct(self, state: "ControllerKeyState", background: Image.Image) -> Image.Image:
         """Direct per-render composition - used when blend-mode layers or the
@@ -3446,17 +3572,23 @@ class ControllerKey(ControllerInput):
             compose_base = Image.new("RGBA", background.size, (0, 0, 0, 0))
 
         key_image: Image.Image = compose_base
-        for image, layout_manager in (
-            (state.key_image.get_raw_image() if state.key_image is not None else
-             state.key_video.get_raw_image() if state.key_video is not None else None, state.layout_manager),
-            (state.media_2_image.get_raw_image() if state.media_2_image is not None else
-             state.media_2_video.get_raw_image() if state.media_2_video is not None else None, state.media_2_layout_manager),
+        for asset, layout_manager in (
+            (state.key_video if state.key_video is not None else state.key_image, state.layout_manager),
+            (state.media_2_video if state.media_2_video is not None else state.media_2_image, state.media_2_layout_manager),
         ):
-            if image is not None:
-                composed = layout_manager.add_image_to_background(image=image, background=key_image)
-                if key_image is not compose_base:
-                    key_image.close()
-                key_image = composed
+            if asset is None:
+                continue
+            layer = asset.get_render_layer(layout_manager, key_image.size)
+            if layer is not None:
+                composed = layout_manager.add_image_to_background(image=layer, background=key_image, pre_resized=True)
+            else:
+                raw = asset.get_raw_image()
+                if raw is None:
+                    continue
+                composed = layout_manager.add_image_to_background(image=raw, background=key_image)
+            if key_image is not compose_base:
+                key_image.close()
+            key_image = composed
 
         labeled_image = state.label_manager.add_labels_to_image(key_image)
 
