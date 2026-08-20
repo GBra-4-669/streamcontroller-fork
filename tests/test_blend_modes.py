@@ -94,3 +94,53 @@ class BlendModesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FastPathTest(unittest.TestCase):
+    """The opaque-backdrop fast path must match the float reference within
+    integer rounding, including semi-transparent sources (mixed via the alpha
+    mask), and must be left untouched for semi-transparent backdrops."""
+
+    def assertPixelAlmostEqual(self, actual, expected, tol=3):
+        for a, e in zip(actual, expected):
+            self.assertTrue(abs(a - e) <= tol, f"pixel {actual} != {expected} (tol {tol})")
+
+    def test_fast_path_matches_float_reference(self):
+        import numpy as np
+        import src.backend.DeckManagement.blend_modes as bm
+
+        rng = np.random.default_rng(11)
+        for mode in BLEND_MODES:
+            if mode in ("normal", "color-dodge", "color-burn", "soft-light"):
+                continue  # soft-light etc. keep the float path by design
+            b = rng.integers(0, 256, (21, 17, 4), dtype=np.uint8)
+            b[..., 3] = 255
+            s = rng.integers(0, 256, (21, 17, 4), dtype=np.uint8)  # random alpha
+            bg = Image.fromarray(b, "RGBA")
+            src = Image.fromarray(s, "RGBA")
+            fast = np.asarray(blend(bg, src, mode)).astype(int)
+
+            fb = b.astype(np.float32) / 255.0
+            fs = s.astype(np.float32) / 255.0
+            bf = bm._blend_function(mode, fb[..., :3], fs[..., :3])
+            ab = fb[..., 3:4]
+            a_s = fs[..., 3:4]
+            co = (1.0 - ab) * a_s * fs[..., :3] + a_s * ab * bf + (1.0 - a_s) * ab * fb[..., :3]
+            ao = a_s + ab * (1.0 - a_s)
+            rgb = np.where(ao > 0.0, co / np.maximum(ao, 1e-6), 0.0)
+            ref = np.clip(np.concatenate([rgb, ao], axis=-1) * 255.0, 0, 255).astype(int)
+
+            self.assertLessEqual(np.abs(fast - ref).max(), 3, mode)
+
+    def test_semi_transparent_backdrop_uses_float_path(self):
+        import numpy as np
+        import src.backend.DeckManagement.blend_modes as bm
+
+        b = np.zeros((5, 5, 4), dtype=np.uint8)
+        b[..., :3] = (100, 120, 140)
+        b[..., 3] = 128
+        s = np.full((5, 5, 4), 255, dtype=np.uint8)
+        s[..., :3] = (200, 30, 40)
+        out = blend(Image.fromarray(b, "RGBA"), Image.fromarray(s, "RGBA"), "screen")
+        self.assertEqual(out.getpixel((2, 2))[3], 255)  # still source-over alpha
+        self.assertNotEqual(list(out.getpixel((2, 2))), [200, 30, 40, 255])

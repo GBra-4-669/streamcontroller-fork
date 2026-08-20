@@ -83,6 +83,62 @@ def _hash_image(image: Image.Image) -> bytes:
     return _hash_payload(image.tobytes())
 
 
+# ---------------------------------------------------------------------------
+# Shared decoded-GIF-frame cache.
+#
+# KeyGIF used to seek + convert("RGBA") the source GIF on every rendered frame,
+# which meant each animated key decoded its whole frame (LZW + disposal
+# compositing) from disk at the media loop rate - the single largest per-tick
+# cost on animation-heavy pages. Frames are decoded once and shared between all
+# keys using the same file, evicted by a global pixel budget (LRU).
+#
+# Evicted/replaced entries are NOT closed eagerly: a renderer on another thread
+# may still hold a reference, and PIL's close() frees the backing buffer out
+# from under it. Dropping the cache's reference lets refcount/GC reclaim the
+# image once the last user is done with it.
+# ---------------------------------------------------------------------------
+_GIF_FRAME_CACHE_MAX_PIXELS = 32_000_000  # ~128 MB of RGBA frames
+_GIF_FRAME_CACHE_MAX_SIDE = 256  # longest side of a cached frame (see KeyGIF)
+
+
+class _GifFrameCache:
+    def __init__(self) -> None:
+        self._cache: dict[tuple[str, int], Image.Image] = {}
+        self._order: list[tuple[str, int]] = []
+        self._pixels = 0
+        self._lock = threading.Lock()
+
+    def get(self, path: str, frame: int) -> Image.Image | None:
+        key = (path, frame)
+        with self._lock:
+            image = self._cache.get(key)
+            if image is not None:
+                # Refresh LRU position.
+                self._order.remove(key)
+                self._order.append(key)
+            return image
+
+    def put(self, path: str, frame: int, image: Image.Image) -> None:
+        key = (path, frame)
+        pixels = image.size[0] * image.size[1]
+        with self._lock:
+            existing = self._cache.get(key)
+            if existing is not None:
+                self._order.remove(key)
+            else:
+                self._pixels += pixels
+            self._cache[key] = image
+            self._order.append(key)
+            while self._pixels > _GIF_FRAME_CACHE_MAX_PIXELS and self._order:
+                evict_key = self._order.pop(0)
+                evicted = self._cache.pop(evict_key, None)
+                if evicted is not None:
+                    self._pixels -= evicted.size[0] * evicted.size[1]
+
+
+_GIF_FRAME_CACHE = _GifFrameCache()
+
+
 @dataclass
 class MediaPlayerTask:
     deck_controller: "DeckController"
@@ -316,7 +372,15 @@ class MediaPlayerThread(threading.Thread):
 
                 # Only iterate keys/dials if there is animated content to update
                 tick_start = time.perf_counter()
+                bg_ms = 0.0
                 if has_bg_video or self._needs_key_ticks():
+                    bg_start = time.perf_counter()
+                    if has_bg_video:
+                        # There is a background video
+                        video_each_nth_frame = self.FPS // self.deck_controller.background.video.fps
+                        if self.media_ticks % video_each_nth_frame == 0:
+                            self.deck_controller.background.update_tiles()
+                    bg_ms = (time.perf_counter() - bg_start) * 1000.0
                     #TODO: generalize
                     for key in self.deck_controller.inputs[Input.Key]:
                         cast("ControllerKey", key).on_media_player_tick()
@@ -339,6 +403,14 @@ class MediaPlayerThread(threading.Thread):
                     log.debug(
                         f"[perf] deck={self.deck_controller.safe_serial_number()} "
                         f"tick_ms={tick_ms:.1f} write_ms={write_ms:.1f} total_ms={tick_ms + write_ms:.1f}"
+                    )
+                elif gl.DEBUG and now - getattr(self, "_last_perf_log_light", 0) > 2.0:
+                    # Always emit a light line at debug level (throttled), so a
+                    # fast tick (< 33ms) is still visible in the logs.
+                    self._last_perf_log_light = now
+                    log.debug(
+                        f"[perf-light] deck={self.deck_controller.safe_serial_number()} "
+                        f"tick_ms={tick_ms:.2f} bg_ms={bg_ms:.2f} write_ms={write_ms:.2f} total_ms={tick_ms + write_ms:.2f}"
                     )
 
                 # USB/task stall signal: a single frame's write phase taking
@@ -1208,6 +1280,7 @@ class DeckController:
                 log.error(f"{e} -> This is okay if you just activated your first deck.")
 
     def close_image_ressources(self):
+        self.background.invalidate_composed_tiles()
         for t in self.inputs:
             for i in self.inputs[t]:
                 i.close_resources()
@@ -1241,6 +1314,8 @@ class DeckController:
             # Clear deck
             self.clear()
             return
+
+        self.background.invalidate_composed_tiles()
 
         log.info(f"Loading page {page.get_name()} on deck {self.safe_serial_number()}")
 
@@ -1381,6 +1456,7 @@ class DeckController:
         content changed behind our back (reconnect) or the logical -> physical mapping
         changed (rotation), because otherwise an unchanged image is never re-sent.
         """
+        self.background.invalidate_composed_tiles()
         for t in self.inputs:
             for i in self.inputs[t]:
                 i._last_img_hash = None
@@ -1586,6 +1662,53 @@ class Background:
         self.standby_video: "BackgroundVideo | None" = None
 
         self.tiles: list[Image.Image] = [None] * deck_controller.deck.key_count()
+        # Cached tiles are owned here; renderers always receive independent copies.
+        self._composed_tiles: dict[tuple[int, ...], list[Image.Image]] = {}
+        self._composed_tiles_lock = threading.RLock()
+
+    def invalidate_composed_tiles(self) -> None:
+        with self._composed_tiles_lock:
+            for tiles in self._composed_tiles.values():
+                for tile in tiles:
+                    if tile is not None:
+                        tile.close()
+            self._composed_tiles.clear()
+
+    def get_composed_tile(self, key: int, background_color: list[int]) -> Image.Image:
+        color = tuple(background_color)
+
+        with self._composed_tiles_lock:
+            if color[-1] == 0:
+                tile = self.tiles[key]
+                return tile.copy() if tile is not None else self.deck_controller.generate_alpha_key()
+
+            composed_tiles = self._composed_tiles.get(color)
+            if composed_tiles is None:
+                composed_tiles = []
+                for tile in self.tiles:
+                    background = None
+                    if color[-1] < 255:
+                        background = tile.copy() if tile is not None else self.deck_controller.generate_alpha_key()
+
+                    if color[-1] > 0:
+                        background_color_img = Image.new(
+                            "RGBA",
+                            self.deck_controller.get_key_image_size(),
+                            color=color,
+                        )
+                        if background is None:
+                            background = background_color_img
+                        else:
+                            background.paste(background_color_img, (0, 0), background_color_img)
+                            background_color_img.close()
+
+                    if background is None:
+                        background = self.deck_controller.generate_alpha_key()
+                    composed_tiles.append(background)
+
+                self._composed_tiles[color] = composed_tiles
+
+            return composed_tiles[key].copy()
 
     def _park_video(self, video: "BackgroundVideo | None") -> None:
         if video is None:
@@ -1638,7 +1761,12 @@ class Background:
                     self.video.page = self.deck_controller.active_page
                     self.video.fps = fps
                     self.video.loop = loop
-                    self.video.opacity = max(0.0, min(1.0, opacity))
+                    new_opacity = max(0.0, min(1.0, opacity))
+                    if self.video.opacity != new_opacity:
+                        self.video.opacity = new_opacity
+                        self.update_tiles()
+                    else:
+                        self.invalidate_composed_tiles()
                     return
                 if self.video is None and self.standby_video is not None and self.standby_video.video_path == path:
                     self.standby_video.page = self.deck_controller.active_page
@@ -1657,20 +1785,21 @@ class Background:
                 self.set_image(BackgroundImage(self.deck_controller, image.copy(), opacity=opacity), update=update)
 
     def update_tiles(self) -> None:
-        old_tiles = self.tiles # Why store them and close them later? So that there is not key error if the media threads fetches them during the update
         if self.image is not None:
-            self.tiles = self.image.get_tiles()
+            new_tiles = self.image.get_tiles()
         elif self.video is not None:
-            self.tiles = self.video.get_next_tiles()
+            new_tiles = self.video.get_next_tiles()
         else:
-            self.tiles = [self.deck_controller.generate_alpha_key() for _ in range(self.deck_controller.deck.key_count())]
+            new_tiles = [self.deck_controller.generate_alpha_key() for _ in range(self.deck_controller.deck.key_count())]
+
+        with self._composed_tiles_lock:
+            old_tiles = self.tiles
+            self.tiles = new_tiles
+            self.invalidate_composed_tiles()
 
         for tile in old_tiles:
             if tile is not None:
                 tile.close()
-                tile = None
-                del tile
-        del old_tiles
 
 class BackgroundImage:
     def __init__(self, deck_controller: DeckController, image: Image, opacity: float = 1.0) -> None:
@@ -1882,8 +2011,21 @@ class KeyGIF(SingleKeyAsset):
             else:
                 self.active_frame = self.n_frames - 1
 
-        self.gif.seek(self.active_frame)
-        return self.gif.convert("RGBA")
+        # Decode each frame once and share it across every key using the same
+        # file. Cached frames are immutable - renderers only read them. Frames
+        # are capped at 256px on their longest side: key renders downscale from
+        # the cache, so a 600x600 frame would otherwise be BILINEAR-resized on
+        # every render (~2ms each); a 256px source resizes in ~0.4ms and the
+        # cap also makes the cache hold ~5x more frames.
+        frame = _GIF_FRAME_CACHE.get(os.path.abspath(self.gif_path), self.active_frame)
+        if frame is None:
+            self.gif.seek(self.active_frame)
+            frame = self.gif.convert("RGBA")
+            if max(frame.size) > _GIF_FRAME_CACHE_MAX_SIDE:
+                frame.thumbnail((_GIF_FRAME_CACHE_MAX_SIDE, _GIF_FRAME_CACHE_MAX_SIDE),
+                                Image.Resampling.BILINEAR)
+            _GIF_FRAME_CACHE.put(os.path.abspath(self.gif_path), self.active_frame, frame)
+        return frame
     
     def get_frame_delay(self) -> float:
         """Get delay for current frame in seconds, adjusted by speed multiplier."""
@@ -1933,6 +2075,7 @@ class LabelManager:
     def clear_labels(self):
         self.init_labels()
         self._has_scroll_labels_cache = None
+        self.controller_input._mark_content_dirty()
 
     def set_page_label(self, position: str, label: "KeyLabel", update: bool = True):
         if label is None:
@@ -1942,6 +2085,7 @@ class LabelManager:
             self.page_labels[position] = label
 
         self._has_scroll_labels_cache = None
+        self.controller_input._mark_content_dirty()
         if update:
             self.update_label(position)
 
@@ -1965,6 +2109,7 @@ class LabelManager:
             self.action_labels[position] = label
 
         self._has_scroll_labels_cache = None
+        self.controller_input._mark_content_dirty()
         GLib.idle_add(self.update_label_editor)
         if update:
             self.update_label(position)
@@ -2074,6 +2219,7 @@ class LabelManager:
         return label
 
     def update_label(self, position: str):
+        self.controller_input._mark_content_dirty()
         self.controller_input.update()
 
     def get_available_width(self) -> int:
@@ -2179,6 +2325,7 @@ class LayoutManager:
     def clear(self):
         self.action_layout = ImageLayout()
         self.page_layout = ImageLayout()
+        self.controller_input._mark_content_dirty()
 
     def get_use_page_layout_properties(self) -> dict:
         return {
@@ -2238,12 +2385,14 @@ class LayoutManager:
     
     def set_page_layout(self, layout: ImageLayout, update: bool = True):
         self.page_layout = layout
+        self.controller_input._mark_content_dirty()
 
         if update:
             self.update()
 
     def set_action_layout(self, layout: ImageLayout, update: bool = True):
         self.action_layout = layout
+        self.controller_input._mark_content_dirty()
 
         if update:
             self.update()
@@ -2335,6 +2484,9 @@ class BackgroundManager:
         if isinstance(color, list) and len(color) == 3:
             self.action_color.append(255)
 
+        background = getattr(self.controller_input.deck_controller, "background", None)
+        if background is not None:
+            background.invalidate_composed_tiles()
         if update:
             self.update()
 
@@ -2343,6 +2495,9 @@ class BackgroundManager:
         if isinstance(color, list) and len(color) == 3:
             self.page_color.append(255)
 
+        background = getattr(self.controller_input.deck_controller, "background", None)
+        if background is not None:
+            background.invalidate_composed_tiles()
         if update:
             self.update(ui=update_ui)
 
@@ -2395,6 +2550,37 @@ class ControllerInputState:
         self.background_manager = BackgroundManager(self.controller_input)
 
         self.action_permission_manager = ActionPermissionManager(self)
+
+    # The visual state fields below are written by plugins (ActionCore) as plain
+    # attributes. The setters invalidate the key content cache so the next
+    # render picks the new value up instead of serving a stale cached layer.
+
+    @property
+    def _overlay(self) -> Image.Image:
+        return self.__overlay
+
+    @_overlay.setter
+    def _overlay(self, value: Image.Image) -> None:
+        self.__overlay = value
+        self.controller_input._mark_content_dirty()
+
+    @property
+    def _border_color(self) -> tuple[int, int, int, int] | None:
+        return self.__border_color
+
+    @_border_color.setter
+    def _border_color(self, value: tuple[int, int, int, int] | None) -> None:
+        self.__border_color = value
+        self.controller_input._mark_content_dirty()
+
+    @property
+    def _status_badge(self) -> tuple[int, int, int, int] | None:
+        return self.__status_badge
+
+    @_status_badge.setter
+    def _status_badge(self, value: tuple[int, int, int, int] | None) -> None:
+        self.__status_badge = value
+        self.controller_input._mark_content_dirty()
 
     def __int__(self):
         return self.state
@@ -2547,6 +2733,13 @@ class ControllerInput:
 
         self.enable_states: bool = True
 
+        # Bumped whenever anything that changes how this input's *content* (as
+        # opposed to the deck background) renders is mutated: media set/cleared,
+        # layouts, labels, overlays, borders, badges. The per-key content cache
+        # keys on this so a key layer is only re-composited when it actually
+        # changed - see ControllerKey._content_signature.
+        self._content_version: int = 0
+
         # Set during page load to avoid rendering on every action update - the
         # final state gets rendered once via update_all_inputs
         self._suppress_render: bool = False
@@ -2569,6 +2762,14 @@ class ControllerInput:
         }
 
         self.states[self.state].ready()
+
+    def _mark_content_dirty(self) -> None:
+        """Invalidate any cached content layer of this input.
+
+        Conservative: bumps the version for the whole input, so switching
+        between states also invalidates - state switches re-render anyway.
+        """
+        self._content_version += 1
 
     @staticmethod
     def Available_Identifiers(deck):
@@ -2834,6 +3035,24 @@ class ControllerKey(ControllerInput):
         # GIF timing tracking
         self.last_gif_update_time: float = 0
 
+        # Cached "content layer" (media + labels + decorations over a
+        # transparent canvas) plus its signature. Rebuilt only when the content
+        # actually changed (media, frame advance, label, layout, press, ...) -
+        # the deck background is composited underneath on every render, so an
+        # animated background does not force a full re-composite of every key.
+        self._content_cache: Image.Image = None
+        self._content_cache_sig: tuple = None
+
+        # Cached "does this key use a blend mode" check, keyed by content
+        # version. Blend layers need the live background, so those keys skip
+        # the content cache and render directly.
+        self._blend_check_key: tuple = None
+        self._blend_check_result: bool = False
+
+        # UI preview throttle state (see set_ui_key_image)
+        self._last_ui_update_time: float = 0.0
+        self._last_ui_press_state: bool = self.press_state
+
     def on_hold_timer_end(self):
         state = self.get_active_state()
         state.own_actions_event_callback_threaded(
@@ -2937,8 +3156,17 @@ class ControllerKey(ControllerInput):
                                     video.get_next_frame()
                             needs_update = True
                 else:
-                    # For non-GIF videos, use the original FPS-based logic
-                    needs_update = True
+                    # Non-GIF videos: only render when a new frame is actually
+                    # due, instead of re-compositing the same frame at the media
+                    # loop rate. InputVideo advances its active_frame on the
+                    # same tick cadence, so the frames line up.
+                    for video in videos:
+                        if isinstance(video, KeyGIF):
+                            continue
+                        every_n_frames = max(1, self.deck_controller.media_player.FPS // max(1, int(video.fps or 30)))
+                        if self.media_ticks % every_n_frames == 0:
+                            needs_update = True
+                            break
             elif self.deck_controller.background.video is not None or state.label_manager.get_has_scroll_labels():
                 # Other content types
                 needs_update = True
@@ -2993,26 +3221,141 @@ class ControllerKey(ControllerInput):
     def get_current_image(self) -> Image.Image:
         state = self.get_active_state()
 
-        background_color = self.get_active_state().background_manager.get_composed_color()
+        background_color = state.background_manager.get_composed_color()
+        background = self.deck_controller.background.get_composed_tile(self.index, background_color)
 
-        background: Image.Image = None
-        # Only load the background image if it's not gonna be hidden by the background color
-        if background_color[-1] < 255:
-            background = copy(self.deck_controller.background.tiles[self.index])
+        # Blend-mode layers and the "background shrinks on press" behaviour need
+        # the live background inside the layer stack, so they render directly.
+        # Everything else is composed as a cached content layer on top of the
+        # current background tile - one layer render per content change instead
+        # of per media tick.
+        shrink_bg_on_press = gl.settings_manager.get_app_settings().get("general", {}).get("shrink-background-on-press", True)
+        if self._get_uses_blend(state) or (self.is_pressed() and shrink_bg_on_press):
+            return self._get_current_image_direct(state, background)
 
-        if background_color[-1] > 0:
-            background_color_img = Image.new("RGBA", self.deck_controller.get_key_image_size(), color=tuple(background_color))
-            
-            if background is None:
-                # Use the color as the only background - happens if background color alpha is 255
-                background = background_color_img
-            else:
-                background.paste(background_color_img, (0, 0), background_color_img)
+        content = self._get_cached_content(state)
+        background.alpha_composite(content)
+        return background
 
+    def _content_signature(self, state: "ControllerKeyState") -> tuple:
+        """Everything that can change a key's content layer, cheap to compute.
 
-        if background is None:
-            background = self.deck_controller.generate_alpha_key().copy()
+        The frame indices make an animated key re-render exactly once per new
+        frame (i.e. at the animation's own cadence), not at the media loop
+        rate. Scroll label positions are included so scrolling labels still
+        advance, at the cost of a rebuild per scroll step for those keys only.
+        """
+        def frame_ref(v) -> int | None:
+            return None if v is None else getattr(v, "active_frame", -1)
 
+        scroll = tuple(
+            (state.label_manager.frames[p]["position"], state.label_manager.frames[p]["wait"])
+            for p in ("top", "center", "bottom")
+        )
+
+        return (
+            id(state),
+            self._content_version,
+            frame_ref(state.key_video),
+            frame_ref(state.media_2_video),
+            self.press_state,
+            self.deck_controller.screen_saver.showing,
+            self.has_unavailable_action(),
+            scroll,
+        )
+
+    def _get_uses_blend(self, state: "ControllerKeyState") -> bool:
+        """Whether any present layer uses a non-normal blend mode."""
+        check_key = (id(state), self._content_version)
+        if self._blend_check_key == check_key:
+            return self._blend_check_result
+
+        result = False
+        for layout_manager, has_asset in (
+            (state.layout_manager, state.key_image is not None or state.key_video is not None),
+            (state.media_2_layout_manager, state.media_2_image is not None or state.media_2_video is not None),
+        ):
+            if has_asset and layout_manager.get_composed_layout().blend_mode != "normal":
+                result = True
+                break
+
+        self._blend_check_key = check_key
+        self._blend_check_result = result
+        return result
+
+    def _get_cached_content(self, state: "ControllerKeyState") -> Image.Image:
+        """Return the key's content layer (media + labels + decorations over a
+        transparent canvas), rebuilding it only when the content signature
+        changed. Callers must not mutate or close the returned image."""
+        sig = self._content_signature(state)
+        if self._content_cache is not None and self._content_cache_sig == sig:
+            return self._content_cache
+
+        base = Image.new("RGBA", self.get_image_size(), (0, 0, 0, 0))
+        key_image = base
+        for image, layout_manager in (
+            (state.key_image.get_raw_image() if state.key_image is not None else
+             state.key_video.get_raw_image() if state.key_video is not None else None, state.layout_manager),
+            (state.media_2_image.get_raw_image() if state.media_2_image is not None else
+             state.media_2_video.get_raw_image() if state.media_2_video is not None else None, state.media_2_layout_manager),
+        ):
+            if image is not None:
+                composed = layout_manager.add_image_to_background(image=image, background=key_image)
+                if key_image is not base:
+                    key_image.close()
+                key_image = composed
+
+        labeled_image = state.label_manager.add_labels_to_image(key_image)
+
+        if self.is_pressed():
+            labeled_image = self.shrink_image(labeled_image)
+
+        if self.has_unavailable_action() and not self.deck_controller.screen_saver.showing:
+            labeled_image = self.add_warning_point(labeled_image)
+
+        if state._border_color is not None:
+            draw = ImageDraw.Draw(labeled_image)
+            draw.rounded_rectangle(
+                (2, 2, labeled_image.width - 3, labeled_image.height - 3),
+                outline=state._border_color,
+                width=7,
+                radius=8,
+            )
+            del draw
+
+        if state._status_badge is not None:
+            draw = ImageDraw.Draw(labeled_image)
+            size = max(14, round(min(labeled_image.size) * 0.22) + 2)
+            margin = max(4, round(size * 0.18))
+            left = labeled_image.width - margin - size
+            top = margin
+            draw.ellipse(
+                (left, top, left + size, top + size),
+                fill=state._status_badge,
+                outline=(0, 0, 0, 255),
+                width=max(2, round(size * 0.12)),
+            )
+            del draw
+
+        if state._overlay:
+            overlay = state._overlay.resize(labeled_image.size)
+            labeled_image.alpha_composite(overlay)
+            overlay.close()
+
+        if key_image is not base:
+            key_image.close()
+        base.close()
+
+        if self._content_cache is not None:
+            self._content_cache.close()
+        self._content_cache = labeled_image
+        self._content_cache_sig = sig
+        return labeled_image
+
+    def _get_current_image_direct(self, state: "ControllerKeyState", background: Image.Image) -> Image.Image:
+        """Direct per-render composition - used when blend-mode layers or the
+        pressed background shrink need the live background in the layer stack.
+        GIF frames still come from the shared frame cache."""
         # If the background should stay full size while pressed, the image and the labels
         # are composed onto a transparent canvas instead, so that only that layer gets
         # shrunk and can be pasted back onto the untouched background
@@ -3258,6 +3601,18 @@ class ControllerKey(ControllerInput):
             # Save to use later
             self.deck_controller.ui_image_changes_while_hidden[self.identifier] = image # The ui key coords are in reverse order
         else:
+            # The GTK preview is refreshed at most ~15fps (the deck itself is
+            # what matters); a press/release still goes through immediately
+            # because its press_state differs from the last update. This keeps
+            # the per-key pixbuf conversion + GPU upload off the main thread
+            # when many keys animate at once.
+            now = time.monotonic()
+            if (now - self._last_ui_update_time < 0.066
+                    and self.press_state == self._last_ui_press_state):
+                image.close()
+                return
+            self._last_ui_update_time = now
+            self._last_ui_press_state = self.press_state
             try:
                 GLib.idle_add(self.deck_controller.get_own_key_grid().buttons[x][y].set_image, image)
             except:
@@ -3915,6 +4270,8 @@ class ControllerKeyState(ControllerInputState):
             # Reset GIF timing
             if isinstance(self.controller_input, ControllerKey):
                 self.controller_input.last_gif_update_time = 0
+
+        self.controller_input._mark_content_dirty()
     
     def set_image(self, key_image: "InputImage", update: bool = True) -> None:
         if self.key_image is not None:
@@ -3924,6 +4281,8 @@ class ControllerKeyState(ControllerInputState):
 
         self.key_image = key_image
         self.key_video = None
+
+        self.controller_input._mark_content_dirty()
 
         if update:
             self.update()
@@ -3940,6 +4299,8 @@ class ControllerKeyState(ControllerInputState):
         if isinstance(self.controller_input, ControllerKey):
             self.controller_input.last_gif_update_time = 0
 
+        self.controller_input._mark_content_dirty()
+
     def set_media_2_image(self, image: "InputImage", update: bool = True) -> None:
         if self.media_2_image is not None:
             self.media_2_image.close()
@@ -3947,6 +4308,9 @@ class ControllerKeyState(ControllerInputState):
             self.media_2_video.close()
         self.media_2_image = image
         self.media_2_video = None
+
+        self.controller_input._mark_content_dirty()
+
         if update:
             self.update()
 
@@ -3957,6 +4321,9 @@ class ControllerKeyState(ControllerInputState):
             self.media_2_image.close()
         self.media_2_video = video
         self.media_2_image = None
+
+        self.controller_input._mark_content_dirty()
+
         if update:
             self.update()
 
@@ -3977,3 +4344,4 @@ class ControllerKeyState(ControllerInputState):
         self.label_manager.clear_labels()
         self.layout_manager.clear()
         self.background_manager.set_page_color(None)
+        self.controller_input._mark_content_dirty()
