@@ -234,7 +234,16 @@ class MediaPlayerSetImageTask:
 
     def run(self):
         try:
+            write_start = time.perf_counter()
             self.deck_controller.deck.set_key_image(self.key_index, self.native_image)
+            write_ms = (time.perf_counter() - write_start) * 1000.0
+            # A single set_key_image normally takes ~1-2ms; anything over 250ms
+            # is a USB write stall (blocking hidraw, device sleep, reconnect).
+            if write_ms > 250.0:
+                log.warning(
+                    f"[usb-stall] deck={self.deck_controller.serial_number()} "
+                    f"key={self.key_index} set_key_image={write_ms:.1f} ms"
+                )
             self.close()
             MediaPlayerSetImageTask.n_failed_in_row[self.deck_controller.serial_number()] = 0
         except StreamDeck.TransportError as e:
@@ -325,11 +334,21 @@ class MediaPlayerThread(threading.Thread):
                 tick_ms = (write_start - tick_start) * 1000.0
                 write_ms = (write_end - write_start) * 1000.0
                 now = time.time()
-                if tick_ms + write_ms > 33.0 and now - getattr(self, "_last_perf_log", 0) > 1.0:
+                if gl.DEBUG and tick_ms + write_ms > 33.0 and now - getattr(self, "_last_perf_log", 0) > 1.0:
                     self._last_perf_log = now
                     log.debug(
                         f"[perf] deck={self.deck_controller.safe_serial_number()} "
                         f"tick_ms={tick_ms:.1f} write_ms={write_ms:.1f} total_ms={tick_ms + write_ms:.1f}"
+                    )
+
+                # USB/task stall signal: a single frame's write phase taking
+                # >500ms means the deck is effectively frozen (<=2fps). Logged at
+                # warning (not debug) because it's a genuine anomaly, not routine
+                # profiling.
+                if write_ms > 500.0:
+                    log.warning(
+                        f"[usb-stall] deck={self.deck_controller.safe_serial_number()} "
+                        f"write_ms={write_ms:.1f} tick_ms={tick_ms:.1f}"
                     )
 
             self.media_ticks += 1
@@ -358,10 +377,13 @@ class MediaPlayerThread(threading.Thread):
         self.running = False
 
     def _needs_key_ticks(self) -> bool:
-        # Check once per second whether any key/dial has animated content
-        # (video or scrolling text) that on_media_player_tick needs to advance.
-        if self.media_ticks % self.FPS != 0:
-            return getattr(self, '_cached_needs_ticks', False)
+        # Recompute every tick. get_has_scroll_labels() is cached (invalidated on
+        # label change), and the video checks are cheap attribute reads, so this is
+        # no longer the ~1350 font-render/sec hotspot it used to be. Recomputing
+        # here instead of once per FPS ticks means the deck ramps from idle 2fps
+        # back to 30fps the moment animated content appears, instead of up to
+        # ~15s later (the old media_ticks % FPS throttle only re-ran every 30
+        # ticks, which is 15s at the idle 2fps cadence).
         needs = False
         for key in self.deck_controller.inputs.get(Input.Key, []):
             state = key.get_active_state()
@@ -563,7 +585,7 @@ class MediaPlayerThread(threading.Thread):
                 task.run()
                 task_runtime = (time.time() - task_start) * 1000
                 queue_wait = (task_start - task.created_at) * 1000 if task.created_at else 0
-                if task_runtime > 60:
+                if task_runtime > 60 and gl.DEBUG:
                     log.debug(f"[media-task] deck={self.deck_controller.safe_serial_number()} label={task.task_label or task._callable.__name__} queue_wait_ms={queue_wait:.1f} run_ms={task_runtime:.1f}")
 
             try:
@@ -1073,7 +1095,8 @@ class DeckController:
             float(config.get("opacity", 1.0)),
         )
         if not force_reload and background_signature == self._last_background_signature:
-            log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} phase=background skip=unchanged")
+            if gl.DEBUG:
+                log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} phase=background skip=unchanged")
             return
         self._last_background_signature = background_signature
 
@@ -1084,7 +1107,8 @@ class DeckController:
             fps=config.get("fps", 30),
             opacity=config.get("opacity", 1.0),
         )
-        log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} phase=background ms={(time.time() - start) * 1000:.1f}")
+        if gl.DEBUG:
+            log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} phase=background ms={(time.time() - start) * 1000:.1f}")
 
     @log.catch
     def load_brightness(self, page: Page):
@@ -1127,7 +1151,8 @@ class DeckController:
             int(config.get("brightness", 30)),
         )
         if screensaver_signature == self._last_screensaver_signature:
-            log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} phase=screensaver skip=unchanged")
+            if gl.DEBUG:
+                log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} phase=screensaver skip=unchanged")
             return
         self._last_screensaver_signature = screensaver_signature
 
@@ -1137,7 +1162,8 @@ class DeckController:
         self.screen_saver.set_loop(config.get("loop", False))
         self.screen_saver.set_fps(config.get("fps", 30))
         self.screen_saver.set_brightness(config.get("brightness", 30))
-        log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} phase=screensaver ms={(time.time() - start) * 1000:.1f}")
+        if gl.DEBUG:
+            log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} phase=screensaver ms={(time.time() - start) * 1000:.1f}")
 
     @log.catch
     def load_all_inputs(self, page: Page, update: bool = True):
@@ -1265,7 +1291,8 @@ class DeckController:
         total_ms = (time.time() - start) * 1000
         log.info(f"Loaded page {page.get_name()} on deck {self.safe_serial_number()}")
         log.info(f"[page-switch] deck={self.safe_serial_number()} page={page.get_name()} total_ms={total_ms:.1f}")
-        log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} page={page.get_name()} brightness_ms={brightness_ms:.1f} screensaver_ms={screensaver_ms:.1f} initialize_actions_ms={initialize_actions_ms:.1f}")
+        if gl.DEBUG:
+            log.debug(f"[page-switch-phase] deck={self.safe_serial_number()} page={page.get_name()} brightness_ms={brightness_ms:.1f} screensaver_ms={screensaver_ms:.1f} initialize_actions_ms={initialize_actions_ms:.1f}")
         self.media_player.reset_fps_history()
         self.maybe_collect_garbage()
 
@@ -2442,7 +2469,21 @@ class ControllerInputState:
                 continue
             if not action.on_ready_called:
                 continue
-            action.on_tick()
+            if gl.DEBUG:
+                start = time.perf_counter()
+                action.on_tick()
+                elapsed_ms = (time.perf_counter() - start) * 1000.0
+                if elapsed_ms >= 25.0:
+                    now = time.monotonic()
+                    if now - getattr(self, "_last_action_perf_log", 0.0) >= 1.0:
+                        self._last_action_perf_log = now
+                        log.debug(
+                            f"[action-perf] deck={self.controller_input.deck_controller.safe_serial_number()} "
+                            f"action={getattr(action, 'id', type(action).__name__)} "
+                            f"on_tick_ms={elapsed_ms:.1f}"
+                        )
+            else:
+                action.on_tick()
 
     @log.catch
     def own_actions_event_callback(self, event: InputEvent, data: dict = None, show_notifications: bool = False) -> None:
@@ -2665,7 +2706,10 @@ class ControllerInput:
         gl.app.main_win.sidebar.key_editor.state_switcher.set_n_states(len(self.states))
 
     def get_active_state(self) -> "ControllerInputState":
-        return self.states.get(self.state, self.ControllerStateClass(self, -1))
+        state = self.states.get(self.state)
+        if state is None:
+            state = self.ControllerStateClass(self, -1)
+        return state
 
     def states_are_persistent(self) -> bool:
         """Whether the active state of this input is remembered in the page json."""

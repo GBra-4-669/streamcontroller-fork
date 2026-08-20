@@ -8,6 +8,7 @@ from src.backend.PluginManager.PluginBase import PluginBase
 import time
 import os
 import psutil
+from threading import Lock
 
 # Import gtk modules
 import gi
@@ -16,9 +17,14 @@ gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw
 
 class CPUTemp(ActionBase):
+    _temperature_cache = None
+    _temperature_cache_at = 0.0
+    _temperature_cache_lock = Lock()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.has_configuration = False
+        self._last_displayed = None
 
         self.unit_row = ComboRow(
             action_core=self,
@@ -40,7 +46,19 @@ class CPUTemp(ActionBase):
         return celsius * 1.8 + 32
 
     def update(self):
-        temperature = psutil.sensors_temperatures()
+        now = time.monotonic()
+        with type(self)._temperature_cache_lock:
+            if now - type(self)._temperature_cache_at >= 1.0:
+                type(self)._temperature_cache = psutil.sensors_temperatures()
+                type(self)._temperature_cache_at = now
+            temperature = type(self)._temperature_cache
+
+        if temperature is None:
+            if self._last_displayed != "N/A":
+                self.set_center_label(text="N/A", font_size=18)
+                self._last_displayed = "N/A"
+            return
+
         # intel cpu
         if "coretemp" in temperature:
             temperature = temperature.get("coretemp")[0].current
@@ -61,4 +79,7 @@ class CPUTemp(ActionBase):
         temp = int(temperature)
         if unit_key == "F":
             temp = self.celcius_to_fahrenheit(temp)
-        self.set_center_label(text=f"{round(temp)} °{unit_key}", font_size=18)
+        displayed = f"{round(temp)} °{unit_key}"
+        if displayed != self._last_displayed:
+            self.set_center_label(text=displayed, font_size=18)
+            self._last_displayed = displayed

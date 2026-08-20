@@ -13,6 +13,7 @@ from src.backend.DeckManagement.HelperMethods import find_fallback_font
 IS_MAC = sys.platform == "darwin"
 
 argparser = build_argparser()
+DEBUG = argparser.parse_args().debug
 
 MAIN_PATH: str
 VAR_APP_PATH = os.path.join(os.path.expanduser("~"), ".var", "app", "com.core447.StreamController")

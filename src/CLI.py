@@ -58,6 +58,7 @@ def build_argparser() -> argparse.ArgumentParser:
     argparser.add_argument("-b", help="Open in background", action="store_true")
     argparser.add_argument("--daemon-only", help="Run without creating the main window until reopened", action="store_true")
     argparser.add_argument("--devel", help="Developer mode (disables auto update)", action="store_true")
+    argparser.add_argument("--debug", help="Enable debug logging (perf profiling, verbose output)", action="store_true")
     argparser.add_argument("--skip-load-hardware-decks", help="Skips initilization/use of hardware decks", action="store_true")
     argparser.add_argument("--close-running", help="Close running", action="store_true")
     argparser.add_argument("--data", help="Data path", type=str)
