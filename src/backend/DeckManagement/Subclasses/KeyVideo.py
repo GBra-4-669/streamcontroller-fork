@@ -91,3 +91,11 @@ class InputVideo(SingleKeyAsset):
 
     def get_raw_image(self) -> Image.Image:
         return self.get_next_frame()
+
+    def get_preview_image(self) -> Image.Image:
+        """Current frame without advancing the animation (for GUI previews)."""
+        frame = max(self.active_frame, 0)
+        try:
+            return self.video_cache.get_frame(frame)
+        except Exception:
+            return None

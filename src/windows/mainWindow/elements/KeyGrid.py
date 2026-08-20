@@ -35,6 +35,7 @@ import globals as gl
 # Import own modules
 from src.backend.DeckManagement.ImageHelpers import image2pixbuf
 from src.backend.DeckManagement.HelperMethods import recursive_hasattr
+from PIL import Image
 
 class KeyGrid(Gtk.Grid):
     """
@@ -313,8 +314,37 @@ class KeyButton(Gtk.Frame):
             return
         # Update icon selector on the top of the right are
         GLib.idle_add(sidebar.key_editor.icon_selector.set_pixbuf_and_del, pixbuf, priority=GLib.PRIORITY_HIGH)
-        # Update icon selector in margin editor
-        # GLib.idle_add(sidebar.key_editor.image_editor.image_group.expander.margin_row.icon_selector.image.set_from_pixbuf, pixbuf)
+
+        # Second image slot: show only the media-2 layer (its asset + layout
+        # over transparent), so it is clear which image sits in the second
+        # slot. The preview never advances an animated media-2, so it cannot
+        # desync the deck's playback.
+        second_pixbuf = self._render_second_slot_preview()
+        GLib.idle_add(sidebar.key_editor.second_icon_selector.set_pixbuf_and_del, second_pixbuf, priority=GLib.PRIORITY_HIGH)
+
+    def _render_second_slot_preview(self) -> "Gdk.Pixbuf | None":
+        """Render only the second image (media-2) of the active key state."""
+        try:
+            key = self.get_key()
+            if key is None:
+                return None
+            state = key.get_active_state()
+            media2 = state.media_2_image if state.media_2_image is not None else state.media_2_video
+            if media2 is None:
+                return None
+            raw = media2.get_preview_image()
+            if raw is None:
+                return None
+            canvas = Image.new("RGBA", key.get_image_size(), (0, 0, 0, 0))
+            composed = state.media_2_layout_manager.add_image_to_background(image=raw, background=canvas)
+            pixbuf = image2pixbuf(composed, force_transparency=True)
+            if composed is not canvas:
+                composed.close()
+            canvas.close()
+            return pixbuf
+        except Exception as e:
+            log.error(f"Failed to render second image preview: {e}")
+            return None
 
     def show_pixbuf(self, pixbuf):
         self.pixbuf = pixbuf

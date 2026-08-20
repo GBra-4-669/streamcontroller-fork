@@ -2139,7 +2139,24 @@ class KeyGIF(SingleKeyAsset):
         if self.active_frame < 0 or self.active_frame >= len(self.frame_delays):
             return (1.0 / self.fps) / self.speed  # Fallback to fps-based timing, adjusted
         return (self.frame_delays[self.active_frame] / 1000.0) / self.speed  # Convert ms to seconds, divide by speed
-    
+
+    def get_preview_image(self) -> Image.Image | None:
+        """Current frame without advancing the animation (for GUI previews)."""
+        frame = max(self.active_frame, 0)
+        cached = _GIF_FRAME_CACHE.get((os.path.abspath(self.gif_path), frame))
+        if cached is not None:
+            return cached
+        try:
+            self.gif.seek(frame)
+            decoded = self.gif.convert("RGBA")
+            if max(decoded.size) > _GIF_FRAME_CACHE_MAX_SIDE:
+                decoded.thumbnail((_GIF_FRAME_CACHE_MAX_SIDE, _GIF_FRAME_CACHE_MAX_SIDE),
+                                  Image.Resampling.BILINEAR)
+            _GIF_FRAME_CACHE.put((os.path.abspath(self.gif_path), frame), decoded)
+            return decoded
+        except Exception:
+            return None
+
     def get_raw_image(self) -> Image.Image:
         return self.get_next_frame()
     
@@ -3364,6 +3381,23 @@ class ControllerKey(ControllerInput):
         background.alpha_composite(content)
         return background
 
+    @staticmethod
+    def _layout_signature(layout_manager: "LayoutManager") -> tuple:
+        """The layout values that shape a rendered layer.
+
+        Read straight off the page/action layouts (not via
+        get_composed_layout) so that ANY in-place mutation - including the
+        page setters (set_media_value, set_media_size, ...) that assign
+        page_layout attributes directly without going through
+        set_page_layout() - invalidates the content cache.
+        """
+        p = layout_manager.page_layout
+        a = layout_manager.action_layout
+        return (
+            p.size, p.valign, p.halign, p.fill_mode, p.opacity, p.blend_mode,
+            a.size, a.valign, a.halign, a.fill_mode, a.opacity, a.blend_mode,
+        )
+
     def _content_signature(self, state: "ControllerKeyState") -> tuple:
         """Everything that can change a key's content layer, cheap to compute.
 
@@ -3383,6 +3417,8 @@ class ControllerKey(ControllerInput):
         return (
             id(state),
             self._content_version,
+            self._layout_signature(state.layout_manager),
+            self._layout_signature(state.media_2_layout_manager),
             frame_ref(state.key_video),
             frame_ref(state.media_2_video),
             self.press_state,
@@ -3393,7 +3429,12 @@ class ControllerKey(ControllerInput):
 
     def _get_uses_blend(self, state: "ControllerKeyState") -> bool:
         """Whether any present layer uses a non-normal blend mode."""
-        check_key = (id(state), self._content_version)
+        check_key = (
+            id(state),
+            self._content_version,
+            self._layout_signature(state.layout_manager),
+            self._layout_signature(state.media_2_layout_manager),
+        )
         if self._blend_check_key == check_key:
             return self._blend_check_result
 
@@ -3439,6 +3480,7 @@ class ControllerKey(ControllerInput):
         return (
             id(state),
             self._content_version,
+            self._layout_signature(state.media_2_layout_manager),
             self.press_state,
             self.deck_controller.screen_saver.showing,
             self.has_unavailable_action(),

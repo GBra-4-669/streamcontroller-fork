@@ -100,6 +100,10 @@ class IconSelector(Gtk.Box):
         return False
 
     def set_pixbuf_and_del(self, pixbuf, task_id: int = None):
+        if pixbuf is None:
+            # Nothing to show (e.g. the second image slot is empty) - blank it.
+            self.image.set_pixbuf(None)
+            return
         self.image.set_pixbuf(pixbuf)
         pixbuf = None
         del pixbuf

@@ -40,5 +40,11 @@ class SingleKeyAsset:
         """
         return None
 
+    def get_preview_image(self) -> Image.Image | None:
+        """Current frame WITHOUT advancing the animation - used for GUI
+        previews, so a preview render must never desync the deck's playback.
+        """
+        return self.get_raw_image()
+
     def close(self):
         pass

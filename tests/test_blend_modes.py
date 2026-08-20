@@ -144,3 +144,40 @@ class FastPathTest(unittest.TestCase):
         out = blend(Image.fromarray(b, "RGBA"), Image.fromarray(s, "RGBA"), "screen")
         self.assertEqual(out.getpixel((2, 2))[3], 255)  # still source-over alpha
         self.assertNotEqual(list(out.getpixel((2, 2))), [200, 30, 40, 255])
+
+
+class W3CBlendModesTest(unittest.TestCase):
+    """hard-light/overlay must follow W3C compositing (the scaled forms), not
+    the simplified multiply/screen."""
+
+    def assertPixelAlmostEqual(self, actual, expected, tol=1):
+        for a, e in zip(actual, expected):
+            self.assertTrue(abs(a - e) <= tol, f"pixel {actual} != {expected} (tol {tol})")
+
+    def test_hard_light_w3c(self):
+        # multiply(Cb, 2Cs) for Cs <= 0.5: Cb=0.5, Cs=0.25 -> 0.25
+        out = blend(rgba((128, 128, 128)), rgba((64, 64, 64)), "hard-light")
+        self.assertPixelAlmostEqual(out.getpixel((0, 0)), (64, 64, 64, 255))
+        # screen(Cb, 2Cs-1) for Cs > 0.5: Cb=0.5, Cs=0.75 -> 0.75
+        out = blend(rgba((128, 128, 128)), rgba((192, 192, 192)), "hard-light")
+        self.assertPixelAlmostEqual(out.getpixel((0, 0)), (192, 192, 192, 255))
+        # must differ from the old simplified multiply(Cb, Cs) at Cs=0.5:
+        # simplified would give 0.25 for Cb=0.5, Cs=0.5; W3C gives 0.5
+        out = blend(rgba((128, 128, 128)), rgba((128, 128, 128)), "hard-light")
+        self.assertPixelAlmostEqual(out.getpixel((0, 0)), (128, 128, 128, 255))
+
+    def test_overlay_w3c(self):
+        # multiply(2Cb, Cs) for Cb <= 0.5: Cb=0.25, Cs=0.5 -> 0.25
+        out = blend(rgba((64, 64, 64)), rgba((128, 128, 128)), "overlay")
+        self.assertPixelAlmostEqual(out.getpixel((0, 0)), (64, 64, 64, 255))
+        # screen(2Cb-1, Cs) for Cb > 0.5: Cb=0.75, Cs=0.5 -> 0.75
+        out = blend(rgba((192, 192, 192)), rgba((128, 128, 128)), "overlay")
+        self.assertPixelAlmostEqual(out.getpixel((0, 0)), (192, 192, 192, 255))
+
+    def test_overlay_is_hard_light_with_swapped_operands(self):
+        out1 = blend(rgba((200, 100, 40)), rgba((60, 180, 220)), "overlay")
+        out2 = blend(rgba((60, 180, 220)), rgba((200, 100, 40)), "hard-light")
+        a = out1.getpixel((0, 0))
+        b = out2.getpixel((0, 0))
+        for x, y in zip(a, b):
+            self.assertTrue(abs(x - y) <= 1, f"overlay != swapped hard-light: {a} vs {b}")

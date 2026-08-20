@@ -63,6 +63,9 @@ class FakeControllerKey:
     def __init__(self):
         self.deck_controller = None
 
+    def get_image_size(self):
+        return (72, 72)
+
 
 class FakeKeyInput:
     """Minimal stand-in for ControllerInput: what LayoutManager touches."""
@@ -402,3 +405,153 @@ class AssetRenderLayerTest(unittest.TestCase):
 
         self.assertEqual(list(plain.tobytes()), list(pre.tobytes()))
         img.close()
+
+
+class PreviewNonAdvancingTest(unittest.TestCase):
+    """GUI previews must show the current frame without advancing the
+    animation, otherwise a preview render would desync the deck's playback."""
+
+    def test_keygif_preview_does_not_advance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "g.gif")
+            make_gif(path, frames=4)
+            gif = KeyGIF(controller_key=FakeControllerKey(), gif_path=path, fps=10, loop=True)
+
+            gif.get_next_frame()  # active_frame: -1 -> 0
+            self.assertEqual(gif.active_frame, 0)
+            frame = gif.get_next_frame()  # -> 1
+            self.assertEqual(gif.active_frame, 1)
+
+            preview = gif.get_preview_image()
+            self.assertIsNotNone(preview)
+            self.assertEqual(gif.active_frame, 1, "preview must not advance the frame")
+            self.assertEqual(preview.size, (64, 64))
+            gif.close()
+
+    def test_keygif_preview_returns_current_frame(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "g.gif")
+            make_gif(path, frames=4)
+            gif = KeyGIF(controller_key=FakeControllerKey(), gif_path=path, fps=10, loop=True)
+
+            gif.get_next_frame()  # frame 0
+            gif.get_next_frame()  # frame 1
+            frame = gif.get_next_frame()  # frame 2
+
+            preview = gif.get_preview_image()
+            # Same frame object from the shared cache - the preview shows what
+            # is actually on screen.
+            self.assertIs(preview, frame)
+            gif.close()
+
+    def test_input_video_preview_does_not_advance(self):
+        from src.backend.DeckManagement.Subclasses.KeyVideo import InputVideo
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "g.gif")
+            make_gif(path, frames=4)
+            video = InputVideo(controller_input=FakeControllerKey(), video_path=path, fps=10, loop=True)
+            try:
+                video.get_next_frame()  # advances to 0 (or wraps)
+                before = video.active_frame
+                preview = video.get_preview_image()
+                self.assertIsNotNone(preview)
+                self.assertEqual(video.active_frame, before, "preview must not advance")
+            finally:
+                video.close()
+
+
+class _LayoutFakeDeck:
+    def key_layout(self): return (1, 1)
+    def key_count(self): return 1
+    def key_image_format(self): return {"size": (72, 72), "format": "JPEG", "rotation": 0, "flip": (False, False)}
+    def get_rotation(self): return 0
+    def get_serial_number(self): return "LAYOUT-FAKE"
+    def is_visual(self): return True
+    def is_open(self): return True
+    def is_touch(self): return False
+    def key_states(self): return [False, False]
+
+
+class _LayoutFakeDeckController:
+    """Enough of a DeckController for ControllerKey content caching."""
+
+    def __init__(self):
+        from src.backend.DeckManagement.DeckController import Background
+
+        self.deck = _LayoutFakeDeck()
+        self.key_spacing = (36, 36)
+        self.active_page = types.SimpleNamespace(
+            action_objects={},
+            get_all_actions_for_input=lambda ident, state: [],
+        )
+        self.screen_saver = types.SimpleNamespace(showing=False)
+        self.media_player = types.SimpleNamespace(
+            FPS=30,
+            add_image_task=lambda *a, **k: None,
+            boost_input_priority=lambda *a, **k: None,
+        )
+        self.background = Background(self)
+        self.ui_image_changes_while_hidden = {}
+        self.inputs = {Input.Key: []}
+        self.hold_time = 0.5
+
+    def get_key_image_size(self): return (72, 72)
+    def generate_alpha_key(self): return Image.new("RGBA", (72, 72), (0, 0, 0, 0))
+    def get_own_key_grid(self): return None
+    def get_alive(self): return True
+    def is_visual(self): return True
+    def safe_serial_number(self): return "LAYOUT-FAKE"
+    def mark_page_ready_to_clear(self, *a): pass
+    def get_input(self, ident): return None
+
+
+class LayoutInvalidationTest(unittest.TestCase):
+    """The page setters (Page.set_media_value / set_media_size / ...) mutate
+    page_layout attributes directly and bypass _mark_content_dirty - the cache
+    signatures must still change so the next render applies the new layout."""
+
+    def _make_key(self):
+        from src.backend.DeckManagement.DeckController import ControllerKey
+
+        dc = _LayoutFakeDeckController()
+        key = ControllerKey(dc, Input.Key("0x0"))
+        dc.inputs[Input.Key] = [key]
+        return key
+
+    def test_direct_media_layout_mutation_invalidates_content(self):
+        key = self._make_key()
+        state = key.get_active_state()
+
+        before = key._content_signature(state)
+        # exactly what Page.set_media_value("size") does:
+        state.layout_manager.page_layout.size = 1.5
+        after = key._content_signature(state)
+        self.assertNotEqual(before, after)
+
+    def test_direct_media2_layout_mutation_invalidates_static_overlay(self):
+        key = self._make_key()
+        state = key.get_active_state()
+
+        before = key._static_overlay_signature(state)
+        # exactly what Page.set_media_value(media_key="media-2", "halign") does:
+        state.media_2_layout_manager.page_layout.halign = -1.0
+        after = key._static_overlay_signature(state)
+        self.assertNotEqual(before, after)
+
+    def test_action_layout_mutation_invalidates_content(self):
+        key = self._make_key()
+        state = key.get_active_state()
+
+        before = key._content_signature(state)
+        state.layout_manager.action_layout.blend_mode = "screen"
+        after = key._content_signature(state)
+        self.assertNotEqual(before, after)
+
+    def test_unchanged_layout_keeps_signature_stable(self):
+        key = self._make_key()
+        state = key.get_active_state()
+
+        s1 = key._content_signature(state)
+        s2 = key._content_signature(state)
+        self.assertEqual(s1, s2)

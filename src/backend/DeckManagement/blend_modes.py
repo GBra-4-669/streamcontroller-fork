@@ -49,19 +49,21 @@ def _blend_function(mode: str, cb: np.ndarray, cs: np.ndarray) -> np.ndarray:
     if mode == "lighten":
         return np.maximum(cb, cs)
     if mode == "color-dodge":
-        # if cb == 0 -> 0; if cs == 1 -> 1; else min(1, cb / (1 - cs))
-        result = np.where(cb <= 0.0, 0.0, np.minimum(1.0, cb / np.maximum(1.0 - cs, 1e-6)))
-        return np.where(cs >= 1.0, 1.0, result)
+        # W3C: if Cb == 0 -> 0; if Cs == 1 -> 1; else min(1, Cb / (1 - Cs))
+        result = np.minimum(1.0, cb / np.maximum(1.0 - cs, 1e-6))
+        return np.where(cb <= 0.0, 0.0, np.where(cs >= 1.0, 1.0, result))
     if mode == "color-burn":
-        # if cb == 1 -> 1; if cs == 0 -> 0; else 1 - min(1, (1 - cb) / cs)
-        result = np.where(cb >= 1.0, 1.0, 1.0 - np.minimum(1.0, (1.0 - cb) / np.maximum(cs, 1e-6)))
-        return np.where(cs <= 0.0, 0.0, result)
+        # W3C: if Cb == 1 -> 1; if Cs == 0 -> 0; else 1 - min(1, (1 - Cb) / Cs)
+        result = 1.0 - np.minimum(1.0, (1.0 - cb) / np.maximum(cs, 1e-6))
+        return np.where(cb >= 1.0, 1.0, np.where(cs <= 0.0, 0.0, result))
     if mode == "hard-light":
-        # multiply if cs <= 0.5 else screen (keyed on source)
-        return np.where(cs <= 0.5, cb * cs, cb + cs - cb * cs)
+        # W3C: multiply(Cb, 2Cs) if Cs <= 0.5, else screen(Cb, 2Cs - 1)
+        two_cs = 2.0 * cs
+        return np.where(cs <= 0.5, cb * two_cs, cb + (two_cs - 1.0) - cb * (two_cs - 1.0))
     if mode == "overlay":
-        # multiply if cb <= 0.5 else screen (keyed on backdrop)
-        return np.where(cb <= 0.5, cb * cs, cb + cs - cb * cs)
+        # W3C: multiply(2Cb, Cs) if Cb <= 0.5, else screen(2Cb - 1, Cs)
+        two_cb = 2.0 * cb
+        return np.where(cb <= 0.5, two_cb * cs, (two_cb - 1.0) + cs - (two_cb - 1.0) * cs)
     if mode == "difference":
         return np.abs(cb - cs)
     if mode == "exclusion":
@@ -149,13 +151,26 @@ def _blend_opaque(backdrop: Image.Image, source: Image.Image, mode: str) -> Imag
         else:  # difference
             blended = ImageChops.difference(bg_rgb, src_rgb)
     elif mode in ("hard-light", "overlay"):
-        mul = ImageChops.multiply(bg_rgb, src_rgb)
-        scr = ImageChops.screen(bg_rgb, src_rgb)
-        # Simplified hard-light/overlay: plain multiply where the key channel is
-        # <= 0.5, plain screen elsewhere (per-channel, like the float path).
-        key = np.asarray(bg_rgb, dtype=np.uint8) if mode == "overlay" else np.asarray(src_rgb, dtype=np.uint8)
-        blended_arr = np.where(key <= 127, np.asarray(mul, dtype=np.uint8), np.asarray(scr, dtype=np.uint8))
-        blended = Image.fromarray(blended_arr, "RGB")
+        # W3C hard-light/overlay with integer arithmetic (int32: products like
+        # 2*Cb*Cs reach ~130k, past uint16's range). hard-light keys on the
+        # source, overlay on the backdrop.
+        b = np.asarray(bg_rgb, dtype=np.uint8)
+        s = np.asarray(src_rgb, dtype=np.uint8)
+        cb = b.astype(np.int32)
+        cs = s.astype(np.int32)
+        if mode == "hard-light":
+            two = 2 * cs
+            mul = (cb * two) // 255
+            y = two - 255  # 0..255 where cs > 127 (the screen branch)
+            scr = cb + y - (cb * y) // 255
+            out = np.where(cs <= 127, mul, scr)
+        else:
+            two = 2 * cb
+            mul = (two * cs) // 255
+            y = two - 255
+            scr = y + cs - (y * cs) // 255
+            out = np.where(cb <= 127, mul, scr)
+        blended = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
     elif mode == "exclusion":
         b = np.asarray(bg_rgb, dtype=np.uint8)
         s = np.asarray(src_rgb, dtype=np.uint8)
