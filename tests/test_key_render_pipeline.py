@@ -598,3 +598,28 @@ class LabelInvalidationTest(unittest.TestCase):
 
         after = key._static_overlay_signature(state)
         self.assertNotEqual(before, after)
+
+
+class AssetCloseRaceTest(unittest.TestCase):
+    """Closing an InputImage must not invalidate its cached render layers -
+    the media thread may still be compositing one (set_image/clear run without
+    the render lock). PIL close() would free the buffer out from under it and
+    kill the media thread with "Operation on closed image"."""
+
+    def test_input_image_close_keeps_cached_layer_usable(self):
+        from src.backend.DeckManagement.Subclasses.KeyImage import InputImage
+
+        fake = FakeKeyInput()
+        img = InputImage(fake, Image.new("RGBA", (192, 192), (10, 20, 30, 255)))
+        lm = LayoutManager(fake)
+        lm.set_action_layout(ImageLayout(size=1.0, fill_mode="cover"), update=False)
+
+        layer = img.get_render_layer(lm, (72, 72))
+        img.close()  # must NOT close the cached layer
+
+        # The layer must still be composable - this used to raise
+        # "ValueError: Operation on closed image".
+        bg = Image.new("RGBA", (72, 72), (255, 255, 255, 255))
+        out = lm.add_image_to_background(image=layer, background=bg, pre_resized=True)
+        self.assertEqual(out.size, (72, 72))
+        self.assertEqual(len(list(out.tobytes())), 72 * 72 * 4)

@@ -157,14 +157,17 @@ def image2pixbuf(img, force_transparency=False):
          return
 
 
-def to_native_key_format_compressed(deck, image, quality: int = 85) -> bytes:
+def to_native_key_format_compressed(deck, image, quality: int = 60) -> bytes:
     """Convert a key image to the deck's native format at lower JPEG quality.
 
     Mirrors StreamDeck.ImageHelpers.PILHelper.to_native_key_format, but encodes
     at a configurable JPEG quality instead of the stock quality=100. At key
-    sizes (72x72) quality 85 is visually indistinguishable from 100, yet yields
-    a substantially smaller file — fewer USB HID reports per key write, which is
-    the dominant cost when many keys animate at once.
+    sizes (72x72) quality 60 is visually indistinguishable from 100, yet yields
+    a substantially smaller file — fewer USB HID reports per key write. An
+    animated deck (15 keys x 30fps) at quality 85 pushes ~1.25 MB/s through the
+    MK.2's ~1 MB/s USB full-speed pipe, which saturates the device and is the
+    likely cause of the intermittent write stalls/hangs; quality 70 stays below
+    the limit.
     """
     image_format = deck.key_image_format()
     if image.size != image_format['size']:

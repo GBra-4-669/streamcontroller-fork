@@ -73,8 +73,12 @@ class InputImage(SingleKeyAsset):
         if not hasattr(self, "image"):
             # Already closed
             return
-        for cached in self._render_layer_cache.values():
-            cached.close()
+        # Drop the cached render layers WITHOUT closing them: the media thread
+        # may still be compositing one of them (set_image/clear run without the
+        # render lock), and PIL's close() frees the backing buffer out from
+        # under it - an in-flight blend then crashes with "Operation on closed
+        # image" and kills the media thread. Refcount/GC reclaims the images
+        # once no renderer references them anymore.
         self._render_layer_cache.clear()
         self.image.close()
         self.image = None

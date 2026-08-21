@@ -364,10 +364,12 @@ class MediaPlayerThread(threading.Thread):
 
         while True:
             start = time.time()
+            loop_start = time.monotonic()
 
             # self.check_connection()
 
             has_bg_video = False
+            bg_ms = 0.0
 
             if not self.pause:
                 if self.deck_controller.background.video is not None:
@@ -376,30 +378,40 @@ class MediaPlayerThread(threading.Thread):
                         # The background video paces itself in real time
                         # (configured or native fps); update_tiles() is a cheap
                         # no-op on ticks where the current frame is still due.
+                        bg_start = time.monotonic()
                         self.deck_controller.background.update_tiles()
+                        bg_ms = (time.monotonic() - bg_start) * 1000.0
 
                 # Only iterate keys/dials if there is animated content to update
                 tick_start = time.perf_counter()
-                bg_ms = 0.0
                 if has_bg_video or self._needs_key_ticks():
-                    bg_start = time.perf_counter()
-                    if has_bg_video:
-                        # There is a background video
-                        video_each_nth_frame = self.FPS // self.deck_controller.background.video.fps
-                        if self.media_ticks % video_each_nth_frame == 0:
-                            self.deck_controller.background.update_tiles()
-                    bg_ms = (time.perf_counter() - bg_start) * 1000.0
+                    # The background video paces itself in real time; the frame
+                    # change happened (or not) inside update_tiles() above.
                     #TODO: generalize
-                    for key in self.deck_controller.inputs[Input.Key]:
-                        cast("ControllerKey", key).on_media_player_tick()
+                    try:
+                        for key in self.deck_controller.inputs[Input.Key]:
+                            cast("ControllerKey", key).on_media_player_tick()
 
-                    for dial in self.deck_controller.inputs[Input.Dial]:
-                        cast("ControllerDial", dial).on_media_player_tick()
-                    # self.deck_controller.update_all_inputs()
+                        for dial in self.deck_controller.inputs[Input.Dial]:
+                            cast("ControllerDial", dial).on_media_player_tick()
+                        # self.deck_controller.update_all_inputs()
+                    except Exception:
+                        # A single bad render (e.g. a closed image from an asset
+                        # swap) must not kill the media thread - that freezes
+                        # the deck display while the rest of the app keeps
+                        # running. Log and continue with the next tick.
+                        log.exception(
+                            f"[media-tick-error] deck={self.deck_controller.safe_serial_number()}"
+                        )
 
                 write_start = time.perf_counter()
                 # Perform media player tasks
-                self.perform_media_player_tasks()
+                try:
+                    self.perform_media_player_tasks()
+                except Exception:
+                    log.exception(
+                        f"[media-write-error] deck={self.deck_controller.safe_serial_number()}"
+                    )
                 write_end = time.perf_counter()
 
                 # Profiling: split compositing (tick) from USB write time.
@@ -429,6 +441,19 @@ class MediaPlayerThread(threading.Thread):
                     log.warning(
                         f"[usb-stall] deck={self.deck_controller.safe_serial_number()} "
                         f"write_ms={write_ms:.1f} tick_ms={tick_ms:.1f}"
+                    )
+
+                # Media-loop watchdog: the whole tick+write+log phase should
+                # never take more than a few seconds. If it does, the media
+                # thread is blocked (usually on a hung USB write to the deck)
+                # and the deck display freezes while the reader thread keeps
+                # delivering key presses. This line pinpoints the blocked phase
+                # on the next occurrence.
+                if time.monotonic() - loop_start > 5.0:
+                    log.warning(
+                        f"[media-stall] deck={self.deck_controller.safe_serial_number()} "
+                        f"media loop blocked {time.monotonic() - loop_start:.1f}s "
+                        f"(tick_ms={tick_ms:.1f} bg_ms={bg_ms:.1f} write_ms={write_ms:.1f})"
                     )
 
             self.media_ticks += 1
@@ -724,8 +749,15 @@ class MediaPlayerThread(threading.Thread):
         if has_hardware_updates:
             with self.deck_controller.deck:
                 for task in sorted(key_tasks, key=lambda t: (-t.priority, t.key_index)):
+                    task_start = time.monotonic()
                     task.run()
                     self.last_key_image_hashes[task.key_index] = task.image_hash
+                    write_time = time.monotonic() - task_start
+                    if write_time > 2.0:
+                        log.warning(
+                            f"[key-write-stall] deck={self.deck_controller.safe_serial_number()} "
+                            f"key={task.key_index} set_key_image blocked for {write_time:.1f}s"
+                        )
 
                 if full_touchscreen_task is not None:
                     full_touchscreen_task.run()
