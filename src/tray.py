@@ -75,25 +75,45 @@ class TrayIcon(DBusTrayIcon):
     def stop(self):
         self.unregister()
 
+    def _ensure_window(self) -> bool:
+        """Make sure the main window exists and the tray actions are wired.
+
+        In daemon-only mode the window is created lazily; until it exists,
+        self.main_win and the captured actions are None, which used to make
+        every tray click a silent no-op.
+        """
+        if self.main_win is not None:
+            return True
+        app = gl.app
+        if app is None or not hasattr(app, "ensure_main_window"):
+            return False
+        app.ensure_main_window()
+        return self.main_win is not None
+
     @log.catch
     def on_show(self):
-        GLib.idle_add(lambda: (self.main_win.present(), False)[1])
+        GLib.idle_add(lambda: (self._ensure_window() and self.main_win.present(), False)[1])
 
     @log.catch
     def on_settings(self):
-        GLib.idle_add(lambda: (self.show_settings_action.activate(), False)[1])
+        GLib.idle_add(lambda: (self._ensure_window() and self.show_settings_action.activate(), False)[1])
 
     @log.catch
     def on_store(self):
-        GLib.idle_add(lambda: (self.show_store_action.activate(), False)[1])
+        GLib.idle_add(lambda: (self._ensure_window() and self.show_store_action.activate(), False)[1])
 
     @log.catch
     def on_about(self):
-        GLib.idle_add(lambda: (self.main_win.present(), False)[1])
-        GLib.idle_add(lambda: (self.show_about_action.activate(), False)[1])
+        GLib.idle_add(lambda: (self._ensure_window(), False)[1])
+        GLib.idle_add(lambda: (self.main_win is not None and self.main_win.present(), False)[1])
+        GLib.idle_add(lambda: (self.show_about_action is not None and self.show_about_action.activate(), False)[1])
 
     @log.catch
     def on_quit(self):
+        if self.main_win is None or self.quit_app_action is None:
+            # Daemon-only: no window/action yet - quit the app directly.
+            GLib.idle_add(lambda: (gl.app.on_quit(), False)[1])
+            return
         GLib.idle_add(lambda: (self.quit_app_action.activate(), False)[1])
 
     @log.catch
@@ -126,6 +146,9 @@ exec "$@"
             stderr=subprocess.DEVNULL,
         )
 
+        if self.main_win is None or self.quit_app_action is None:
+            GLib.idle_add(lambda: (gl.app.on_quit(), False)[1])
+            return
         GLib.idle_add(lambda: (self.quit_app_action.activate(), False)[1])
 
 
