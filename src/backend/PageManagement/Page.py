@@ -926,6 +926,24 @@ class Page:
         if update:
             self.update_input(identifier, state)
 
+    def get_label_line_height(self, identifier: InputIdentifier, state: int, label_position: str) -> float:
+        return self._get_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "labels", label_position, "line_height"])
+
+    def set_label_line_height(self, identifier: InputIdentifier, state: int, label_position: str, line_height: float, update: bool = True) -> None:
+        for key_state in self.get_controller_input_states(identifier, state):
+            key_state.label_manager.page_labels[label_position].line_height = line_height
+            key_state.controller_input._mark_content_dirty()
+
+        self._set_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), "labels", label_position, "line_height"], line_height)
+
+        label_manager = self.get_label_manager(identifier, state)
+        if label_manager is not None:
+            label_manager.page_labels[label_position].line_height = line_height
+            label_manager.update_label_editor()
+
+        if update:
+            self.update_input(identifier, state)
+
     def get_media_value(self, identifier: InputIdentifier, state: int, media_key: str, property_name: str):
         return self._get_dict_value([identifier.input_type, identifier.json_identifier, "states", str(state), media_key, property_name])
 

@@ -623,3 +623,56 @@ class AssetCloseRaceTest(unittest.TestCase):
         out = lm.add_image_to_background(image=layer, background=bg, pre_resized=True)
         self.assertEqual(out.size, (72, 72))
         self.assertEqual(len(list(out.tobytes())), 72 * 72 * 4)
+
+
+class LineHeightTest(unittest.TestCase):
+    """Line height scales the label's line box: a top label with a higher
+    line height sits lower, a bottom label sits higher, center stays put."""
+
+    def _topmost(self, img):
+        data = img.convert("RGBA").load()
+        for y in range(img.height):
+            for x in range(img.width):
+                if data[x, y][3] > 200:
+                    return y
+        return None
+
+    def _bottommost(self, img):
+        data = img.convert("RGBA").load()
+        for y in range(img.height - 1, -1, -1):
+            for x in range(img.width):
+                if data[x, y][3] > 200:
+                    return y
+        return None
+
+    def _render(self, position, line_height):
+        from src.backend.DeckManagement.DeckController import LabelManager
+        from src.backend.DeckManagement.Subclasses.KeyLabel import KeyLabel
+
+        fake = FakeKeyInput()
+        fake.media_ticks = 0
+        lm = LabelManager(fake)
+        lm.set_page_label(position, KeyLabel(controller_input=fake, text="TEST",
+                                             font_size=20, line_height=line_height), update=False)
+        return lm.add_labels_to_image(Image.new("RGBA", (72, 72), (0, 0, 0, 0)))
+
+    def test_top_label_moves_down_with_line_height(self):
+        t1 = self._topmost(self._render("top", 1.0))
+        t2 = self._topmost(self._render("top", 2.0))
+        self.assertIsNotNone(t1)
+        self.assertIsNotNone(t2)
+        self.assertGreater(t2, t1, "higher line height must push a top label down")
+
+    def test_bottom_label_moves_up_with_line_height(self):
+        b1 = self._bottommost(self._render("bottom", 1.0))
+        b2 = self._bottommost(self._render("bottom", 2.0))
+        self.assertIsNotNone(b1)
+        self.assertIsNotNone(b2)
+        self.assertLess(b2, b1, "higher line height must push a bottom label up")
+
+    def test_center_label_stays(self):
+        t1 = self._topmost(self._render("center", 1.0))
+        t2 = self._topmost(self._render("center", 2.0))
+        self.assertIsNotNone(t1)
+        self.assertIsNotNone(t2)
+        self.assertEqual(t1, t2, "line height must not move centered labels")

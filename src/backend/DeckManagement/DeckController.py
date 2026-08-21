@@ -2252,7 +2252,8 @@ class LabelManager:
                 and a.font_weight == b.font_weight and a.style == b.style
                 and a.outline_width == b.outline_width
                 and a.outline_color == b.outline_color
-                and a.alignment == b.alignment)
+                and a.alignment == b.alignment
+                and a.line_height == b.line_height)
 
     def set_action_label(self, position: str, label: "KeyLabel", update: bool = True):
         if label is None:
@@ -2296,6 +2297,7 @@ class LabelManager:
                 "outline_width": False,
                 "outline_color": False,
                 "alignment": False,
+                "line_height": False,
             }
         return {
             "text": self.page_labels[position].text is not None,
@@ -2307,6 +2309,7 @@ class LabelManager:
             "outline_width": self.page_labels[position].outline_width is not None,
             "outline_color": self.page_labels[position].outline_color is not None,
             "alignment": self.page_labels[position].alignment is not None,
+            "line_height": self.page_labels[position].line_height is not None,
         }
 
     def get_composed_label(self, position: str) -> str:
@@ -2335,6 +2338,8 @@ class LabelManager:
                 label.outline_color = page_label.outline_color
             if use_page_label_properties["alignment"]:
                 label.alignment = page_label.alignment
+            if use_page_label_properties["line_height"]:
+                label.line_height = page_label.line_height
 
         injected = self.inject_defaults(label)
         return self.fix_invalid(injected)
@@ -2365,6 +2370,8 @@ class LabelManager:
             label.outline_color = gl.settings_manager.font_defaults.get("outline-color") or (0, 0, 0, 255)
         if label.alignment is None:
             label.alignment = gl.settings_manager.font_defaults.get("alignment") or "center"
+        if label.line_height is None:
+            label.line_height = 1.0
 
         return label
     
@@ -2412,6 +2419,10 @@ class LabelManager:
             alignment = labels[label].alignment
 
             _, _, w, h = draw.textbbox((0, 0), text, font=font)
+            # CSS-like line height: scale the line box the label is positioned
+            # by. Top labels move down / bottom labels move up with more line
+            # height; centered labels stay centered.
+            h = h * (labels[label].line_height or 1.0)
 
             # Calculate x position based on alignment
             padding = 3
@@ -3810,7 +3821,8 @@ class ControllerKey(ControllerInput):
                         color=state_dict["labels"][label].get("color"),
                         outline_width=state_dict["labels"][label].get("outline_width"),
                         outline_color=state_dict["labels"][label].get("outline_color"),
-                        alignment=state_dict["labels"][label].get("alignment")
+                        alignment=state_dict["labels"][label].get("alignment"),
+                        line_height=state_dict["labels"][label].get("line_height")
                     )
                     # self.add_label(key_label, position=label, update=False)
                     state.label_manager.set_page_label(label, key_label, update=False)

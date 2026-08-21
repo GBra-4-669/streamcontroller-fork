@@ -174,6 +174,18 @@ class LabelRow(Adw.PreferencesRow):
         self.outline_color_chooser_button.set_hexpand(False)
         self.outline_box.append(self.outline_color_chooser_button)
 
+        self.line_height_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, hexpand=True, margin_top=6)
+        self.main_box.append(self.line_height_box)
+
+        self.line_height_label = Gtk.Label(label=gl.lm.get("label-editor-line-height-label", "Line height:"), xalign=0, hexpand=True, margin_start=2)
+        self.line_height_label.set_hexpand(True)
+        self.line_height_box.append(self.line_height_label)
+
+        self.line_height = SpinButton(0.5, 3.0, 0.1)
+        self.line_height.set_hexpand(False)
+        self.line_height_box.append(self.line_height)
+        self.line_height.revert_button.connect("clicked", self.on_reset_line_height)
+
         ## Connect reset buttons
         self.text_entry.revert_button.connect("clicked", self.on_reset_text)
         self.color_chooser_button.revert_button.connect("clicked", self.on_reset_color)
@@ -187,6 +199,7 @@ class LabelRow(Adw.PreferencesRow):
         self.color_chooser_button.button.connect("color-set", self.on_change_color)
         self.font_chooser_button.button.connect("font-set", self.on_change_font)
         self.outline_width.button.connect("value-changed", self.on_change_outline_width)
+        self.line_height.button.connect("value-changed", self.on_change_line_height)
         self.outline_color_chooser_button.button.connect("color-set", self.on_change_outline_color)
         self.alignment_buttons.left_button.connect("toggled", self.on_change_alignment)
         self.alignment_buttons.center_button.connect("toggled", self.on_change_alignment)
@@ -210,6 +223,10 @@ class LabelRow(Adw.PreferencesRow):
 
         try:
             self.outline_width.button.disconnect_by_func(self.on_change_outline_width)
+        except Exception as e:
+            log.error(f"Failed to disconnect signals. Error: {e}")
+        try:
+            self.line_height.button.disconnect_by_func(self.on_change_line_height)
         except Exception as e:
             log.error(f"Failed to disconnect signals. Error: {e}")
 
@@ -249,6 +266,7 @@ class LabelRow(Adw.PreferencesRow):
         self.outline_width.revert_button.set_visible(use_page_label_properties.get("outline_width", False))
         self.outline_color_chooser_button.revert_button.set_visible(use_page_label_properties.get("outline_color", False))
         self.alignment_buttons.revert_button.set_visible(use_page_label_properties.get("alignment", False))
+        self.line_height.revert_button.set_visible(use_page_label_properties.get("line_height", False))
 
         font_combined = use_page_label_properties.get("font-family", False) and use_page_label_properties.get("font-size", False)
         self.font_chooser_button.revert_button.set_visible(font_combined)
@@ -276,11 +294,13 @@ class LabelRow(Adw.PreferencesRow):
         self.font_chooser_box.set_visible(not hide_details)
         self.outline_box.set_visible(not hide_details)
         self.alignment_box.set_visible(not hide_details)
+        self.line_height_box.set_visible(not hide_details)
 
         self.set_color(composed_label.color)
         self.set_outline_width(composed_label.outline_width)
         self.set_outline_color(composed_label.outline_color)
         self.set_alignment(composed_label.alignment)
+        self.set_line_height(composed_label.line_height)
 
         # self.font_chooser_button.button.set_font_desc(Pango.FontDescription.from_string(f"{composed_label.font_name} {composed_label.style} {composed_label.font_size}px"))
         desc = get_pango_font_description(
@@ -308,6 +328,24 @@ class LabelRow(Adw.PreferencesRow):
 
     def set_alignment(self, alignment: str):
         self.alignment_buttons.set_alignment(alignment)
+
+    def set_line_height(self, line_height: float):
+        self.line_height.button.set_value(float(line_height or 1.0))
+
+    def on_change_line_height(self, _):
+        value = self.line_height.button.get_value()
+
+        active_page = gl.app.main_win.get_active_page()
+        active_page.set_label_line_height(identifier=self.active_identifier, state=self.state, label_position=self.key_name, line_height=value)
+
+        self.line_height.revert_button.set_visible(True)
+
+    def on_reset_line_height(self, button):
+        active_page = gl.app.main_win.get_active_page()
+        active_page.set_label_line_height(identifier=self.active_identifier, state=self.state, label_position=self.key_name, line_height=None)
+
+        self.line_height.revert_button.set_visible(False)
+        self.update_values()
 
     def on_change_color(self, _):
         color = self.color_chooser_button.button.get_rgba()

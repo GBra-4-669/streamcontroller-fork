@@ -61,6 +61,7 @@ class KeyLabel:
     outline_width: int = None
     outline_color: list[int] = None
     alignment: str = None  # left, center, right
+    line_height: float = None  # CSS-like multiplier on the text line box (default 1.0)
 
     def get_font_path(self) -> str:
         font_name = self.font_name
@@ -86,6 +87,7 @@ class KeyLabel:
         self.outline_width = None
         self.outline_color = None
         self.alignment = None
+        self.line_height = None
 
     def get_font(self) -> ImageFont.FreeTypeFont:
         font_path = self.get_font_path()

@@ -41,6 +41,7 @@ LABEL_PROPERTIES = {
     "outline-width": "outline_width",
     "outline-color": "outline_color",
     "align": "alignment",
+    "line-height": "line_height",
 }
 
 # CLI property name -> JSON key under states.<n>.media
@@ -65,6 +66,7 @@ LABEL_METHOD = {
     "outline-width": "outline_width",
     "outline-color": "outline_color",
     "align": "alignment",
+    "line-height": "line_height",
 }
 
 # CLI property name -> Page.get_media_<x>()/set_media_<x>() method suffix.
@@ -90,6 +92,7 @@ LABEL_VALUE_TYPES = {
     "outline-width": "int",
     "outline-color": "color",
     "align": "str",
+    "line-height": "float",
 }
 MEDIA_VALUE_TYPES = {
     "path": "str",
