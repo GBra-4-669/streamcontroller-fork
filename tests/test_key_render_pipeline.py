@@ -555,3 +555,46 @@ class LayoutInvalidationTest(unittest.TestCase):
         s1 = key._content_signature(state)
         s2 = key._content_signature(state)
         self.assertEqual(s1, s2)
+
+
+class LabelInvalidationTest(unittest.TestCase):
+    """The page label setters (Page.set_label_text & co) mutate the live
+    KeyLabel objects in place and must invalidate the content cache, exactly
+    like the layout setters do."""
+
+    def _make_key(self):
+        from src.backend.DeckManagement.DeckController import ControllerKey
+
+        dc = _LayoutFakeDeckController()
+        key = ControllerKey(dc, Input.Key("0x0"))
+        dc.inputs[Input.Key] = [key]
+        return key
+
+    def test_label_mutation_invalidates_content(self):
+        key = self._make_key()
+        state = key.get_active_state()
+        from src.backend.DeckManagement.Subclasses.KeyLabel import KeyLabel
+
+        state.label_manager.set_page_label("bottom", KeyLabel(controller_input=key, text="BEFORE"), update=False)
+        before = key._content_signature(state)
+
+        # exactly what Page.set_label_text does now: mutate + invalidate
+        state.label_manager.page_labels["bottom"].text = "AFTER"
+        state.controller_input._mark_content_dirty()
+
+        after = key._content_signature(state)
+        self.assertNotEqual(before, after)
+
+    def test_static_overlay_signature_tracks_labels(self):
+        key = self._make_key()
+        state = key.get_active_state()
+        from src.backend.DeckManagement.Subclasses.KeyLabel import KeyLabel
+
+        state.label_manager.set_page_label("center", KeyLabel(controller_input=key, text="X"), update=False)
+        before = key._static_overlay_signature(state)
+
+        state.label_manager.page_labels["center"].text = "Y"
+        state.controller_input._mark_content_dirty()
+
+        after = key._static_overlay_signature(state)
+        self.assertNotEqual(before, after)
