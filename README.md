@@ -1,12 +1,16 @@
+
+
+
+
 # StreamDeckGB
 
 A personal fork of [StreamController](https://github.com/StreamController/StreamController) with a handful of quality-of-life changes I use on my own Stream Deck.
 
-<video autoplay muted loop playsinline controls src="site/videos/streamdeckgb-example-3.mp4"></video>
+[<video autoplay muted loop playsinline controls src="site/videos/streamdeckgb-example-3.mp4"></video>](https://github.com/user-attachments/assets/7709af93-d3d5-4eef-8526-a8e7bf3111db)
 
-<video autoplay muted loop playsinline controls src="site/videos/streamdeckgb-example.mp4"></video>
+[<video autoplay muted loop playsinline controls src="site/videos/streamdeckgb-example.mp4"></video>](https://github.com/user-attachments/assets/05b11f1d-c3f1-4656-885b-586e3486aa93)
 
-<video autoplay muted loop playsinline controls src="site/videos/streamdeckgb-example-2.mp4"></video>
+[<video autoplay muted loop playsinline controls src="site/videos/streamdeckgb-example-2.mp4"></video>](https://github.com/user-attachments/assets/6871664a-c291-4da7-acda-4a4d6a09cb89)
 
 If the videos do not work or play inline, you can find them also on the [demo page](https://gbra-4-669.github.io/streamcontroller-fork/).
 
